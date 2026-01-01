@@ -5,6 +5,13 @@
 //  A macOS menu bar app for controlling LG Gram features
 //  Based on LG Control Center for Windows
 //
+//  Confirmed EC Features:
+//    - Keyboard Backlight (0x72): Off/Low/High
+//    - Silent Mode (0xCF): Normal/Silent
+//    - Battery Care Limit (0xBC): 80%/100%
+//    - USB Charging (0xBE): Off/On
+//    - Fn Lock (0x73): Off/On
+//
 //  Copyright © 2024-2025 GramSMC contributors.
 //
 
@@ -16,6 +23,7 @@ struct GramControlCenterApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     
     var body: some Scene {
+        // Empty scene - we use menu bar only, Settings opened manually
         Settings {
             EmptyView()
         }
@@ -26,8 +34,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var statusItem: NSStatusItem!
     var gramSMC: GramSMCController!
     var updateTimer: Timer?
+    var settingsWindow: NSWindow?
     
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Hide dock icon (backup, Info.plist should have LSUIElement=true)
+        NSApp.setActivationPolicy(.accessory)
+        
         // Create status bar item
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         
@@ -57,74 +69,47 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let menu = NSMenu()
         let isConnected = gramSMC.isConnected
         
-        // Header
-        let headerItem = NSMenuItem(title: "LG Gram Control Center", action: nil, keyEquivalent: "")
+        // Header with status
+        let statusText = isConnected ? "✓ GramSMC Connected" : "✗ GramSMC Not Found"
+        let headerItem = NSMenuItem(title: statusText, action: nil, keyEquivalent: "")
         headerItem.isEnabled = false
         menu.addItem(headerItem)
         
-        // Connection status
-        let statusText = isConnected ? "✓ Connected to GramSMC" : "✗ GramSMC not found"
-        let statusMenuItem = NSMenuItem(title: statusText, action: nil, keyEquivalent: "")
-        statusMenuItem.isEnabled = false
-        menu.addItem(statusMenuItem)
+        // Status info (when connected)
+        if isConnected {
+            let infoItem = NSMenuItem(title: "CPU: \(gramSMC.cpuTemp)°C  •  Fan: \(gramSMC.fanRPM) RPM", action: nil, keyEquivalent: "")
+            infoItem.isEnabled = false
+            menu.addItem(infoItem)
+        }
+        
         menu.addItem(NSMenuItem.separator())
         
-        // Fan Mode submenu
-        let fanMenu = NSMenu()
-        let fanModes = ["Optimal", "Silent", "Performance"]
-        for (index, mode) in fanModes.enumerated() {
-            let item = NSMenuItem(title: mode, action: #selector(setFanMode(_:)), keyEquivalent: "")
-            item.target = self
-            item.tag = index
-            item.state = gramSMC.fanMode == index ? .on : .off
-            item.isEnabled = isConnected && (gramSMC.capabilities & 0x01 != 0)
-            fanMenu.addItem(item)
-        }
-        let fanItem = NSMenuItem(title: "Fan Mode", action: nil, keyEquivalent: "")
-        fanItem.submenu = fanMenu
-        fanItem.isEnabled = isConnected && (gramSMC.capabilities & 0x01 != 0)
-        menu.addItem(fanItem)
+        // Open Settings Window
+        let settingsItem = NSMenuItem(title: "Open Settings...", action: #selector(openSettings), keyEquivalent: ",")
+        settingsItem.target = self
+        menu.addItem(settingsItem)
         
-        // Battery Care submenu
-        let batteryMenu = NSMenu()
-        let limits = [80, 100]
-        for limit in limits {
-            let item = NSMenuItem(title: "\(limit)%", action: #selector(setBatteryCare(_:)), keyEquivalent: "")
-            item.target = self
-            item.tag = limit
-            item.state = gramSMC.batteryCareLimit == limit ? .on : .off
-            item.isEnabled = isConnected && (gramSMC.capabilities & 0x02 != 0)
-            batteryMenu.addItem(item)
-        }
-        let batteryItem = NSMenuItem(title: "Battery Care Limit", action: nil, keyEquivalent: "")
-        batteryItem.submenu = batteryMenu
-        batteryItem.isEnabled = isConnected && (gramSMC.capabilities & 0x02 != 0)
+        menu.addItem(NSMenuItem.separator())
+        
+        // Quick Toggles
+        let kblLevels = ["Off", "Low", "High"]
+        let kblItem = NSMenuItem(title: "Keyboard: \(kblLevels[gramSMC.keyboardBacklight])", action: #selector(cycleKeyboardBacklight), keyEquivalent: "")
+        kblItem.target = self
+        kblItem.isEnabled = isConnected
+        menu.addItem(kblItem)
+        
+        let silentItem = NSMenuItem(title: "Silent Mode", action: #selector(toggleSilentMode), keyEquivalent: "")
+        silentItem.target = self
+        silentItem.state = gramSMC.silentMode ? .on : .off
+        silentItem.isEnabled = isConnected
+        menu.addItem(silentItem)
+        
+        let batteryItem = NSMenuItem(title: "Battery Care (\(gramSMC.batteryCareLimit)%)", action: #selector(toggleBatteryCare), keyEquivalent: "")
+        batteryItem.target = self
+        batteryItem.state = gramSMC.batteryCareLimit == 80 ? .on : .off
+        batteryItem.isEnabled = isConnected
         menu.addItem(batteryItem)
         
-        menu.addItem(NSMenuItem.separator())
-        
-        // Toggle Features - always show, grey out if not available
-        addToggleItem(menu, title: "USB Charging", state: gramSMC.usbCharging, 
-                     capability: 0x04, action: #selector(toggleUSBCharging), connected: isConnected)
-        addToggleItem(menu, title: "Reader Mode", state: gramSMC.readerMode, 
-                     capability: 0x08, action: #selector(toggleReaderMode), connected: isConnected)
-        addToggleItem(menu, title: "Fn Lock", state: gramSMC.fnLock, 
-                     capability: 0x10, action: #selector(toggleFnLock), connected: isConnected)
-        addToggleItem(menu, title: "Instant Boot", state: gramSMC.smartOn, 
-                     capability: 0x20, action: #selector(toggleSmartOn), connected: isConnected)
-        addToggleItem(menu, title: "Boost Mode", state: gramSMC.boostMode, 
-                     capability: 0x40, action: #selector(toggleBoostMode), connected: isConnected)
-        addToggleItem(menu, title: "Eco Mode", state: gramSMC.ecoMode, 
-                     capability: 0x80, action: #selector(toggleEcoMode), connected: isConnected)
-        addToggleItem(menu, title: "Webcam", state: gramSMC.webcam, 
-                     capability: 0x200, action: #selector(toggleWebcam), connected: isConnected)
-        
-        menu.addItem(NSMenuItem.separator())
-        
-        // About
-        let aboutItem = NSMenuItem(title: "About GramControlCenter", action: #selector(showAbout), keyEquivalent: "")
-        aboutItem.target = self
-        menu.addItem(aboutItem)
         menu.addItem(NSMenuItem.separator())
         
         // Quit
@@ -134,95 +119,340 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem.menu = menu
     }
     
-    func addToggleItem(_ menu: NSMenu, title: String, state: Bool, capability: UInt32, action: Selector, connected: Bool) {
-        let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
-        item.target = self
-        item.state = state ? .on : .off
-        // Enable only if connected AND capability is available
-        item.isEnabled = connected && (gramSMC.capabilities & capability != 0)
-        menu.addItem(item)
-    }
+    // MARK: - Quick Actions
     
-    @objc func setFanMode(_ sender: NSMenuItem) {
-        gramSMC.setFanMode(UInt32(sender.tag))
+    @objc func cycleKeyboardBacklight() {
+        let newLevel = (gramSMC.keyboardBacklight + 1) % 3
+        gramSMC.setKeyboardBacklight(UInt32(newLevel))
         updateMenu()
     }
     
-    @objc func setBatteryCare(_ sender: NSMenuItem) {
-        gramSMC.setBatteryCareLimit(UInt32(sender.tag))
+    @objc func toggleSilentMode() {
+        gramSMC.setSilentMode(!gramSMC.silentMode)
         updateMenu()
     }
     
-    @objc func toggleUSBCharging() {
-        gramSMC.setUSBCharging(!gramSMC.usbCharging)
+    @objc func toggleBatteryCare() {
+        let newLimit: UInt32 = gramSMC.batteryCareLimit == 80 ? 100 : 80
+        gramSMC.setBatteryCareLimit(newLimit)
         updateMenu()
     }
     
-    @objc func toggleReaderMode() {
-        gramSMC.setReaderMode(!gramSMC.readerMode)
-        updateMenu()
-    }
+    // MARK: - Settings Window
     
-    @objc func toggleFnLock() {
-        gramSMC.setFnLock(!gramSMC.fnLock)
-        updateMenu()
-    }
-    
-    @objc func toggleSmartOn() {
-        gramSMC.setSmartOn(!gramSMC.smartOn)
-        updateMenu()
-    }
-    
-    @objc func toggleBoostMode() {
-        gramSMC.setBoostMode(!gramSMC.boostMode)
-        updateMenu()
-    }
-    
-    @objc func toggleEcoMode() {
-        gramSMC.setEcoMode(!gramSMC.ecoMode)
-        updateMenu()
-    }
-    
-    @objc func toggleWebcam() {
-        gramSMC.setWebcam(!gramSMC.webcam)
-        updateMenu()
-    }
-    
-    @objc func showAbout() {
-        let alert = NSAlert()
-        alert.messageText = "LG Gram Control Center"
-        alert.informativeText = """
-        Version 1.0
+    @objc func openSettings() {
+        if settingsWindow == nil {
+            let contentView = SettingsView(controller: gramSMC)
+            settingsWindow = NSWindow(
+                contentRect: NSRect(x: 0, y: 0, width: 500, height: 450),
+                styleMask: [.titled, .closable, .miniaturizable],
+                backing: .buffered,
+                defer: false
+            )
+            settingsWindow?.title = "LG Gram Control Center"
+            settingsWindow?.contentView = NSHostingView(rootView: contentView)
+            settingsWindow?.center()
+            settingsWindow?.isReleasedWhenClosed = false
+        }
         
-        Control your LG Gram laptop features from the menu bar.
-        
-        Powered by GramSMC kernel extension.
-        
-        Copyright © 2024-2025 GramSMC contributors.
-        Based on LG Control Center for Windows.
-        """
-        alert.alertStyle = .informational
-        alert.addButton(withTitle: "OK")
+        settingsWindow?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
-        alert.runModal()
+    }
+}
+
+// MARK: - Settings View (SwiftUI)
+
+struct SettingsView: View {
+    @ObservedObject var controller: GramSMCController
+    @State private var refreshTimer: Timer?
+    
+    var body: some View {
+        VStack(spacing: 0) {
+            // Header
+            HStack {
+                Image(systemName: "laptopcomputer")
+                    .font(.system(size: 28))
+                    .foregroundColor(.accentColor)
+                Text("LG Gram Control Center")
+                    .font(.title2)
+                    .fontWeight(.semibold)
+                Spacer()
+                Circle()
+                    .fill(controller.isConnected ? Color.green : Color.red)
+                    .frame(width: 10, height: 10)
+                Text(controller.isConnected ? "Connected" : "Disconnected")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            .padding()
+            .background(Color(NSColor.controlBackgroundColor))
+            
+            Divider()
+            
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    
+                    // System Section
+                    SettingsSection(title: "System", icon: "gearshape") {
+                        // Silent Mode
+                        ToggleRow(
+                            title: "Silent Mode",
+                            subtitle: "Reduce fan noise for quiet operation",
+                            icon: "speaker.slash",
+                            isOn: Binding(
+                                get: { controller.silentMode },
+                                set: { controller.setSilentMode($0) }
+                            ),
+                            isEnabled: controller.isConnected
+                        )
+                        
+                        Divider()
+                        
+                        // Battery Care
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack {
+                                Image(systemName: "battery.75")
+                                    .foregroundColor(.green)
+                                Text("Battery Care Limit")
+                                    .fontWeight(.medium)
+                                Spacer()
+                            }
+                            Text("Limit charging to extend battery lifespan")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            
+                            Picker("", selection: Binding(
+                                get: { controller.batteryCareLimit },
+                                set: { controller.setBatteryCareLimit(UInt32($0)) }
+                            )) {
+                                Text("80% (Recommended)").tag(80)
+                                Text("100% (Full Charge)").tag(100)
+                            }
+                            .pickerStyle(.segmented)
+                            .disabled(!controller.isConnected)
+                        }
+                        
+                        Divider()
+                        
+                        // USB Charging
+                        ToggleRow(
+                            title: "USB Charging (Always On)",
+                            subtitle: "Charge devices via USB when laptop is off or sleeping",
+                            icon: "cable.connector",
+                            isOn: Binding(
+                                get: { controller.usbCharging },
+                                set: { controller.setUSBCharging($0) }
+                            ),
+                            isEnabled: controller.isConnected
+                        )
+                    }
+                    
+                    // Input Section
+                    SettingsSection(title: "Input", icon: "keyboard") {
+                        // Keyboard Backlight
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack {
+                                Image(systemName: "light.max")
+                                    .foregroundColor(.yellow)
+                                Text("Keyboard Backlight")
+                                    .fontWeight(.medium)
+                                Spacer()
+                            }
+                            
+                            Picker("", selection: Binding(
+                                get: { controller.keyboardBacklight },
+                                set: { controller.setKeyboardBacklight(UInt32($0)) }
+                            )) {
+                                Text("Off").tag(0)
+                                Text("Low").tag(1)
+                                Text("High").tag(2)
+                            }
+                            .pickerStyle(.segmented)
+                            .disabled(!controller.isConnected)
+                        }
+                        
+                        Divider()
+                        
+                        // Fn Lock
+                        ToggleRow(
+                            title: "Fn Lock",
+                            subtitle: "Use F1-F12 keys directly without holding Fn",
+                            icon: "fn",
+                            isOn: Binding(
+                                get: { controller.fnLock },
+                                set: { controller.setFnLock($0) }
+                            ),
+                            isEnabled: controller.isConnected
+                        )
+                    }
+                    
+                    // Display Section
+                    SettingsSection(title: "Display", icon: "display") {
+                        HStack {
+                            Image(systemName: "moon.fill")
+                                .foregroundColor(.orange)
+                            VStack(alignment: .leading) {
+                                Text("Night Light")
+                                    .fontWeight(.medium)
+                                Text("Reduce blue light for comfortable reading")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            Spacer()
+                            Button("Open Display Settings") {
+                                if let url = URL(string: "x-apple.systempreferences:com.apple.preference.displays") {
+                                    NSWorkspace.shared.open(url)
+                                }
+                            }
+                            .buttonStyle(.bordered)
+                        }
+                    }
+                    
+                    // Status Section
+                    if controller.isConnected {
+                        SettingsSection(title: "Status", icon: "chart.bar") {
+                            HStack {
+                                StatusCard(
+                                    title: "CPU Temperature",
+                                    value: "\(controller.cpuTemp)°C",
+                                    icon: "thermometer.medium",
+                                    color: controller.cpuTemp > 70 ? .red : (controller.cpuTemp > 50 ? .orange : .green)
+                                )
+                                StatusCard(
+                                    title: "Fan Speed",
+                                    value: "\(controller.fanRPM) RPM",
+                                    icon: "fan",
+                                    color: controller.fanRPM > 3000 ? .orange : .blue
+                                )
+                            }
+                        }
+                    }
+                }
+                .padding()
+            }
+            
+            // Footer
+            Divider()
+            HStack {
+                Text("GramSMC v2.0")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                Spacer()
+                Text("Based on LG Control Center")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            .padding(.horizontal)
+            .padding(.vertical, 8)
+        }
+        .frame(minWidth: 500, minHeight: 450)
+        .onAppear {
+            // Refresh data periodically
+            refreshTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { _ in
+                controller.refresh()
+            }
+        }
+        .onDisappear {
+            refreshTimer?.invalidate()
+        }
+    }
+}
+
+// MARK: - UI Components
+
+struct SettingsSection<Content: View>: View {
+    let title: String
+    let icon: String
+    let content: Content
+    
+    init(title: String, icon: String, @ViewBuilder content: () -> Content) {
+        self.title = title
+        self.icon = icon
+        self.content = content()
+    }
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Image(systemName: icon)
+                    .foregroundColor(.accentColor)
+                Text(title)
+                    .font(.headline)
+            }
+            
+            VStack(alignment: .leading, spacing: 12) {
+                content
+            }
+            .padding()
+            .background(Color(NSColor.controlBackgroundColor))
+            .cornerRadius(10)
+        }
+    }
+}
+
+struct ToggleRow: View {
+    let title: String
+    let subtitle: String
+    let icon: String
+    @Binding var isOn: Bool
+    let isEnabled: Bool
+    
+    var body: some View {
+        HStack {
+            Image(systemName: icon)
+                .foregroundColor(.accentColor)
+            VStack(alignment: .leading) {
+                Text(title)
+                    .fontWeight(.medium)
+                Text(subtitle)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            Spacer()
+            Toggle("", isOn: $isOn)
+                .toggleStyle(.switch)
+                .disabled(!isEnabled)
+        }
+    }
+}
+
+struct StatusCard: View {
+    let title: String
+    let value: String
+    let icon: String
+    let color: Color
+    
+    var body: some View {
+        VStack(spacing: 8) {
+            Image(systemName: icon)
+                .font(.title2)
+                .foregroundColor(color)
+            Text(value)
+                .font(.title3)
+                .fontWeight(.semibold)
+            Text(title)
+                .font(.caption)
+                .foregroundColor(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding()
+        .background(Color(NSColor.controlBackgroundColor))
+        .cornerRadius(8)
     }
 }
 
 // MARK: - GramSMC IOKit Controller
 
-class GramSMCController {
-    var capabilities: UInt32 = 0
-    var fanMode: Int = 0
-    var batteryCareLimit: Int = 100
-    var usbCharging: Bool = false
-    var readerMode: Bool = false
-    var fnLock: Bool = false
-    var smartOn: Bool = false
-    var boostMode: Bool = false
-    var ecoMode: Bool = false
-    var webcam: Bool = true
-    var usbTypeC: UInt32 = 0
-    var isConnected: Bool = false
+class GramSMCController: ObservableObject {
+    @Published var capabilities: UInt32 = 0
+    @Published var keyboardBacklight: Int = 0  // 0=Off, 1=Low, 2=High
+    @Published var silentMode: Bool = false
+    @Published var batteryCareLimit: Int = 100
+    @Published var usbCharging: Bool = false
+    @Published var fnLock: Bool = false
+    @Published var cpuTemp: Int = 0
+    @Published var fanRPM: Int = 0
+    @Published var isConnected: Bool = false
     
     private var service: io_service_t = 0
     
@@ -238,7 +468,6 @@ class GramSMCController {
     }
     
     func connect() {
-        // Release old service if any
         if service != 0 {
             IOObjectRelease(service)
             service = 0
@@ -248,55 +477,39 @@ class GramSMCController {
         service = IOServiceGetMatchingService(kIOMainPortDefault, matching)
         
         if service == 0 {
-            print("GramSMC service not found - kext may not be loaded")
+            print("GramSMC service not found")
             isConnected = false
         } else {
-            print("GramSMC service found and connected")
+            print("GramSMC connected")
             isConnected = true
         }
     }
     
     func refresh() {
-        // Try to reconnect if not connected
         if !isConnected {
             connect()
         }
         
-        guard service != 0 else { 
+        guard service != 0 else {
             isConnected = false
-            // Set default values when not connected
-            capabilities = 0
-            fanMode = 0
-            batteryCareLimit = 100
-            usbCharging = false
-            readerMode = false
-            fnLock = false
-            smartOn = false
-            boostMode = false
-            ecoMode = false
-            webcam = true
-            usbTypeC = 0
-            return 
+            return
         }
         
-        capabilities = getProperty("Capabilities") ?? 0
-        fanMode = Int(getProperty("FanMode") ?? 0)
-        batteryCareLimit = Int(getProperty("BatteryCareLimit") ?? 100)
-        usbCharging = getBoolProperty("USBCharging")
-        readerMode = getBoolProperty("ReaderMode")
-        fnLock = getBoolProperty("FnLock")
-        smartOn = getBoolProperty("SmartOn")
-        boostMode = getBoolProperty("BoostMode")
-        ecoMode = getBoolProperty("EcoMode")
-        webcam = getBoolProperty("Webcam")
-        usbTypeC = getProperty("USBTypeC") ?? 0
-        
-        isConnected = true
+        DispatchQueue.main.async { [self] in
+            capabilities = getProperty("Capabilities") ?? 0
+            keyboardBacklight = Int(getProperty("KeyboardBacklight") ?? 0)
+            silentMode = getBoolProperty("SilentMode")
+            batteryCareLimit = Int(getProperty("BatteryCareLimit") ?? 100)
+            usbCharging = getBoolProperty("USBCharging")
+            fnLock = getBoolProperty("FnLock")
+            cpuTemp = Int(getProperty("CPUTemp") ?? 0)
+            fanRPM = Int(getProperty("FanRPM") ?? 0)
+            isConnected = true
+        }
     }
     
     func getProperty(_ name: String) -> UInt32? {
         guard service != 0 else { return nil }
-        
         if let prop = IORegistryEntryCreateCFProperty(service, name as CFString, kCFAllocatorDefault, 0) {
             if let number = prop.takeRetainedValue() as? NSNumber {
                 return number.uint32Value
@@ -307,7 +520,6 @@ class GramSMCController {
     
     func getBoolProperty(_ name: String) -> Bool {
         guard service != 0 else { return false }
-        
         if let prop = IORegistryEntryCreateCFProperty(service, name as CFString, kCFAllocatorDefault, 0) {
             if let number = prop.takeRetainedValue() as? NSNumber {
                 return number.boolValue
@@ -316,83 +528,40 @@ class GramSMCController {
         return false
     }
     
-    // MARK: - Setters (via IORegistry property setting)
+    // MARK: - Setters
     
-    func setFanMode(_ mode: UInt32) {
-        guard service != 0 else { 
-            print("Cannot set fan mode: GramSMC not connected")
-            return 
-        }
-        fanMode = Int(mode)
-        setProperty("FanMode", value: mode)
-        print("Setting fan mode to \(mode)")
+    func setKeyboardBacklight(_ level: UInt32) {
+        guard service != 0 else { return }
+        keyboardBacklight = Int(level)
+        setProperty("KeyboardBacklight", value: level)
+    }
+    
+    func setSilentMode(_ enabled: Bool) {
+        guard service != 0 else { return }
+        silentMode = enabled
+        setProperty("SilentMode", value: enabled ? 1 : 0)
     }
     
     func setBatteryCareLimit(_ limit: UInt32) {
-        guard service != 0 else { 
-            print("Cannot set battery care: GramSMC not connected")
-            return 
-        }
+        guard service != 0 else { return }
         batteryCareLimit = Int(limit)
         setProperty("BatteryCareLimit", value: limit)
-        print("Setting battery care limit to \(limit)%")
     }
     
     func setUSBCharging(_ enabled: Bool) {
-        guard service != 0 else { 
-            print("Cannot set USB charging: GramSMC not connected")
-            return 
-        }
+        guard service != 0 else { return }
         usbCharging = enabled
         setProperty("USBCharging", value: enabled ? 1 : 0)
-        print("USB charging: \(enabled)")
-    }
-    
-    func setReaderMode(_ enabled: Bool) {
-        guard service != 0 else { return }
-        readerMode = enabled
-        setProperty("ReaderMode", value: enabled ? 1 : 0)
-        print("Reader mode: \(enabled)")
     }
     
     func setFnLock(_ enabled: Bool) {
         guard service != 0 else { return }
         fnLock = enabled
         setProperty("FnLock", value: enabled ? 1 : 0)
-        print("Fn lock: \(enabled)")
-    }
-    
-    func setSmartOn(_ enabled: Bool) {
-        guard service != 0 else { return }
-        smartOn = enabled
-        setProperty("SmartOn", value: enabled ? 1 : 0)
-        print("SmartOn: \(enabled)")
-    }
-    
-    func setBoostMode(_ enabled: Bool) {
-        guard service != 0 else { return }
-        boostMode = enabled
-        setProperty("BoostMode", value: enabled ? 1 : 0)
-        print("Boost mode: \(enabled)")
-    }
-    
-    func setEcoMode(_ enabled: Bool) {
-        guard service != 0 else { return }
-        ecoMode = enabled
-        setProperty("EcoMode", value: enabled ? 1 : 0)
-        print("Eco mode: \(enabled)")
-    }
-    
-    func setWebcam(_ enabled: Bool) {
-        guard service != 0 else { return }
-        webcam = enabled
-        setProperty("Webcam", value: enabled ? 1 : 0)
-        print("Webcam: \(enabled)")
     }
     
     private func setProperty(_ name: String, value: UInt32) {
         guard service != 0 else { return }
-        
         let number = NSNumber(value: value)
         IORegistryEntrySetCFProperty(service, name as CFString, number)
     }
