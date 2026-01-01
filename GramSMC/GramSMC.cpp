@@ -213,6 +213,67 @@ IOReturn GramSMC::message(uint32_t type, IOService *provider, void *argument) {
   return kIOReturnSuccess;
 }
 
+void GramSMC::setPropertiesGated(OSObject *props) {
+  OSDictionary *dict = OSDynamicCast(OSDictionary, props);
+  if (!dict)
+    return;
+
+  OSNumber *value;
+
+  // Fan Mode
+  if ((value = OSDynamicCast(OSNumber, dict->getObject("FanMode")))) {
+    uint32_t mode = value->unsigned32BitValue();
+    if (mode <= kFanModePerformance) {
+      setFanMode(mode);
+      SYSLOG("gram", "setProperties: FanMode set to %u", mode);
+    }
+  }
+
+  // Battery Care Limit
+  if ((value = OSDynamicCast(OSNumber, dict->getObject("BatteryCareLimit")))) {
+    uint32_t limit = value->unsigned32BitValue();
+    if (limit == 80 || limit == 100) {
+      setBatteryCareLimit(limit);
+      SYSLOG("gram", "setProperties: BatteryCareLimit set to %u", limit);
+    }
+  }
+
+  // USB Charging
+  if ((value = OSDynamicCast(OSNumber, dict->getObject("USBCharging")))) {
+    setUSBCharging(value->unsigned32BitValue() != 0);
+    SYSLOG("gram", "setProperties: USBCharging set to %u",
+           value->unsigned32BitValue());
+  }
+
+  // Reader Mode
+  if ((value = OSDynamicCast(OSNumber, dict->getObject("ReaderMode")))) {
+    setReaderMode(value->unsigned32BitValue() != 0);
+    SYSLOG("gram", "setProperties: ReaderMode set to %u",
+           value->unsigned32BitValue());
+  }
+
+  // Fn Lock
+  if ((value = OSDynamicCast(OSNumber, dict->getObject("FnLock")))) {
+    setFnLock(value->unsigned32BitValue() != 0);
+    SYSLOG("gram", "setProperties: FnLock set to %u",
+           value->unsigned32BitValue());
+  }
+
+  // Webcam
+  if ((value = OSDynamicCast(OSNumber, dict->getObject("Webcam")))) {
+    setWebcam(value->unsigned32BitValue() != 0);
+    SYSLOG("gram", "setProperties: Webcam set to %u",
+           value->unsigned32BitValue());
+  }
+}
+
+IOReturn GramSMC::setProperties(OSObject *props) {
+  command_gate->runAction(OSMemberFunctionCast(IOCommandGate::Action, this,
+                                               &GramSMC::setPropertiesGated),
+                          props);
+  return kIOReturnSuccess;
+}
+
 void GramSMC::initGramDevice() {
   // LG Gram initialization - no WMI needed
   SYSLOG("gram", "Initializing GramSMC device");
@@ -638,16 +699,23 @@ void GramSMC::handleMessage(int code) {
     dispatchTCReport(kHIDUsage_AV_TopCase_VideoMirror);
     break;
 
+  case 0x70: // F1 - LG Control Center / Settings
+    kev.sendMessage(kDaemonKeyboardBacklight, 0, 0); // Notify daemon
+    DBGLOG("gram", "F1 Settings key pressed");
+    break;
+
+  case 0x74: // F5 - Keyboard backlight toggle
+    if (hasKeyboardBacklight) {
+      dispatchTCReport(kHIDUsage_AV_TopCase_IlluminationToggle);
+    }
+    break;
+
   case 0x6B: // Touchpad On/Off
     toggleTouchpad();
     break;
 
   case 0x7D: // Airplane mode
     toggleAirplaneMode();
-    break;
-
-  case GRAM_EVENT_FAN_MODE: // 0x70 - Fan mode toggle (Fn+Q)
-    cycleFanMode();
     break;
 
   case 0xF9: // Reader mode toggle (Fn+F9)
