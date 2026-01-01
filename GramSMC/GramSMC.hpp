@@ -1,12 +1,16 @@
 //
-//  AsusSMC.hpp
-//  AsusSMC
+//  GramSMC.hpp
+//  GramSMC
+//
+//  Based on AsusSMC by Le Bao Hiep
+//  Modified for LG Gram laptops
 //
 //  Copyright © 2018-2020 Le Bao Hiep. All rights reserved.
+//  Copyright © 2024-2025 GramSMC contributors.
 //
 
-#ifndef _AsusSMC_hpp
-#define _AsusSMC_hpp
+#ifndef _GramSMC_hpp
+#define _GramSMC_hpp
 
 #include <IOKit/IOTimerEventSource.h>
 #include <IOKit/IOCommandGate.h>
@@ -17,21 +21,28 @@
 #include "KernEventServer.hpp"
 #include "KeyImplementations.hpp"
 
-#define ASUS_WMI_METHODID_DSTS         0x53545344
-#define ASUS_WMI_METHODID_DEVS         0x53564544
-#define ASUS_WMI_METHODID_INIT         0x54494E49
-#define ASUS_WMI_DEVID_ALS_ENABLE      0x00050001
-#define ASUS_WMI_DEVID_CPU_FAN_CTRL    0x00110013
-#define ASUS_WMI_DEVID_RSOC            0x00120057
-#define ASUS_WMI_DSTS_PRESENCE_BIT     0x00010000
-#define ASUS_WMI_MGMT_GUID             "97845ED0-4E6D-11DE-8A39-0800200C9A66"
+// LG Gram EC register offsets
+#define GRAM_EC_KBBL_REG           0xE0    // Keyboard backlight brightness
+#define GRAM_EC_SLED_REG           0xEB    // Keyboard LED state
+#define GRAM_EC_FNKN_REG           0xE4    // Function key number
+#define GRAM_EC_ALS_REG            0xDC    // Ambient light sensor (16-bit)
+#define GRAM_EC_TEMP1_REG          0xC8    // Temperature sensor 1
+#define GRAM_EC_TEMP2_REG          0xC9    // Temperature sensor 2
+#define GRAM_EC_FAN_REG            0xCB    // Fan RPM register
+
+// LG Gram Event codes (from SSDT-GramSMC)
+#define GRAM_EVENT_BRIGHTNESS_DOWN 0x10
+#define GRAM_EVENT_BRIGHTNESS_UP   0x11
+#define GRAM_EVENT_KBBL_UP         0xC4
+#define GRAM_EVENT_KBBL_DOWN       0xC5
+#define GRAM_EVENT_SLEEP           0x5E
 
 #define kDeliverNotifications "RM,deliverNotifications"
 
-#define AsusSMCEventCode 0x8102
+#define GramSMCEventCode 0x80
 
-class AsusSMC : public IOService {
-    OSDeclareDefaultStructors(AsusSMC)
+class GramSMC : public IOService {
+    OSDeclareDefaultStructors(GramSMC)
 
     VirtualSMCAPI::Plugin vsmcPlugin {
         xStringify(PRODUCT_NAME),
@@ -49,29 +60,9 @@ public:
     void letSleep();
     void toggleAirplaneMode();
     void toggleTouchpad();
-    void toggleALS(bool state);
-    void toggleBatteryConservativeMode(bool state);
     void displayOff();
 
 private:
-    struct guid_block {
-        char guid[16];
-        union {
-            char object_id[2];
-            struct {
-                uint8_t notify_id;
-                uint8_t reserved;
-            };
-        };
-        uint8_t instance_count;
-        uint8_t flags;
-    };
-
-    struct wmi_args {
-        uint32_t arg0;
-        uint32_t arg1;
-    } __packed;
-
     enum {
         kKeyboardSetTouchStatus = iokit_vendor_specific_msg(100), // set disable/enable touchpad (data is bool*)
         kKeyboardGetTouchStatus = iokit_vendor_specific_msg(101), // get disable/enable touchpad (data is bool*)
@@ -87,35 +78,29 @@ private:
 
     static constexpr uint32_t SensorUpdateTimeoutMS {1000};
 
+    // LG Gram brightness event codes
     static constexpr uint8_t NOTIFY_BRIGHTNESS_UP_MIN = 0x10;
     static constexpr uint8_t NOTIFY_BRIGHTNESS_UP_MAX = 0x1F;
 
     static constexpr uint8_t NOTIFY_BRIGHTNESS_DOWN_MIN = 0x20;
     static constexpr uint8_t NOTIFY_BRIGHTNESS_DOWN_MAX = 0x2F;
 
-    char wmi_method[5];
-    int wmi_parse_guid(const char *in, char *out);
-    int wmi_evaluate_method(uint32_t method_id, uint32_t arg0, uint32_t arg1);
-    int wmi_get_devstate(uint32_t dev_id);
-    bool wmi_dev_is_present(uint32_t dev_id);
-    void parse_WDG();
-
-    void initATKDevice();
+    void initGramDevice();
     void initALSDevice();
-    void initEC0Device();
-    void initBattery();
+    void initECDevice();
     void initVirtualKeyboard();
 
-    void startATKDevice();
+    void startGramDevice();
     
     bool refreshALS(bool post);
     bool refreshFan();
 
     void handleMessage(int code);
 
-    IOACPIPlatformDevice *atkDevice {nullptr};
+    // LG Gram device (GRAM0001 from SSDT)
+    IOACPIPlatformDevice *gramDevice {nullptr};
     IOACPIPlatformDevice *alsDevice {nullptr};
-    IOACPIPlatformDevice *ec0Device {nullptr};
+    IOACPIPlatformDevice *ecDevice {nullptr};
     VirtualAppleKeyboard *kbdDevice {nullptr};
 
     ALSForceBits forceBits;
@@ -133,13 +118,12 @@ private:
     consumer_input csmrreport;
     apple_vendor_top_case_input tcreport;
 
-    bool directACPImessaging {false};
-    bool hasKeyboardBacklight {false};
+    bool directACPImessaging {true};   // LG Gram uses direct messaging
+    bool hasKeyboardBacklight {true};  // LG Gram has keyboard backlight
     bool isALSEnabled {true};
     bool isTouchpadEnabled {true};
     bool isPanelBackLightOn {true};
     bool isTACHAvailable {false};
-    bool isBatteryRSOCAvailable {false};
 
     uint32_t panelBrightnessLevel {16};
     char backlightEntry[1000];
@@ -147,6 +131,10 @@ private:
     int checkBacklightEntry();
     int findBacklightEntry();
     void readPanelBrightnessValue();
+
+    // Keyboard backlight control via ACPI
+    uint32_t getKeyboardBacklight();
+    void setKeyboardBacklight(uint32_t level);
 
     IOReturn postKeyboardInputReport(const void *report, uint32_t reportSize);
     void dispatchCSMRReport(int code, int loop = 1);
@@ -165,4 +153,4 @@ private:
     static bool vsmcNotificationHandler(void *sensors, void *refCon, IOService *vsmc, IONotifier *notifier);
 };
 
-#endif //_AsusSMC_hpp
+#endif //_GramSMC_hpp

@@ -1,8 +1,12 @@
 //
 //  KeyImplementations.hpp
-//  AsusSMC
+//  GramSMC
+//
+//  Based on AsusSMC by Le Bao Hiep
+//  Modified for LG Gram laptops
 //
 //  Copyright © 2018-2020 Le Bao Hiep. All rights reserved.
+//  Copyright © 2024-2025 GramSMC contributors.
 //
 //  Ambient light sensor support is based on SMCLightSensor
 
@@ -103,7 +107,7 @@ public:
 };
 
 class SMCKBrdBLightValue : public VirtualSMCValue {
-    IOService *asusSMCInstance {nullptr};
+    IOService *gramSMCInstance {nullptr};
 
 protected:
     SMC_RESULT update(const SMC_DATA *src) override;
@@ -118,7 +122,7 @@ public:
         uint8_t val2 {1};
     };
 
-    SMCKBrdBLightValue(IOService *asusSMCInstance): asusSMCInstance(asusSMCInstance) {}
+    SMCKBrdBLightValue(IOService *gramSMCInstance): gramSMCInstance(gramSMCInstance) {}
 };
 
 class F0Ac : public VirtualSMCValue {

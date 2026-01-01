@@ -1,12 +1,16 @@
 //
 //  KeyImplementations.cpp
-//  AsusSMC
+//  GramSMC
+//
+//  Based on AsusSMC by Le Bao Hiep
+//  Modified for LG Gram laptops
 //
 //  Copyright © 2018-2020 Le Bao Hiep. All rights reserved.
+//  Copyright © 2024-2025 GramSMC contributors.
 //
 
 #include "KeyImplementations.hpp"
-#include "AsusSMC.hpp"
+#include "GramSMC.hpp"
 
 SMC_RESULT SMCALSValue::readAccess() {
     auto value = reinterpret_cast<Value *>(data);
@@ -38,8 +42,8 @@ SMC_RESULT SMCKBrdBLightValue::update(const SMC_DATA *src)  {
 
     delete value;
 
-    if (asusSMCInstance) {
-        asusSMCInstance->message(kSetKeyboardBacklightMessage, nullptr, &tval);
+    if (gramSMCInstance) {
+        gramSMCInstance->message(kSetKeyboardBacklightMessage, nullptr, &tval);
     }
 
     lilu_os_memcpy(data, src, size);
@@ -52,16 +56,11 @@ SMC_RESULT F0Ac::readAccess() {
     return SmcSuccess;
 }
 
+// Note: BDVT (BatteryDev Toggle) is removed for LG Gram as it uses different
+// battery management. The class remains in header for API compatibility.
 SMC_RESULT BDVT::update(const SMC_DATA *src)  {
-    bool state = false;
-    lilu_os_memcpy(&state, src, size);
-
-    // BDVT is 00 when battery health is enabled and 01 when disabled
-    state = !state;
-
-    AsusSMC *drv = OSDynamicCast(AsusSMC, dst);
-    drv->toggleBatteryConservativeMode(state);
-
+    // LG Gram does not support this feature
+    // Just copy data and return success
     lilu_os_memcpy(data, src, size);
     return SmcSuccess;
 }

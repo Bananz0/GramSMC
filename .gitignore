@@ -11,3 +11,17 @@ build
 .svace-dir
 cov-int
 /MacKernelSDK
+
+# ACPI tables (machine-specific)
+ACPI-Gram/
+*.aml
+*.dsl
+
+# Reference projects
+YogaSMC-Reference/
+
+# Extra documentation (keep only README.md)
+INSTALLATION_GUIDE.md
+OPENCORE_INSTALLATION.md
+REFACTORING_SUMMARY.md
+TESTING_GUIDE.md

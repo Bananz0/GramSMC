@@ -1,11 +1,15 @@
 //
 //  main.m
-//  AsusSMCDaemon
+//  GramSMCDaemon
+//
+//  Based on AsusSMCDaemon by Le Bao Hiep
+//  Modified for LG Gram laptops
 //
 //  Copyright © 2018-2020 Le Bao Hiep. All rights reserved.
+//  Copyright © 2024-2025 GramSMC contributors.
 //
 
-#define AsusSMCEventCode 0x8102
+#define GramSMCEventCode 0x80
 
 #import <Cocoa/Cocoa.h>
 #import <CoreWLAN/CoreWLAN.h>
@@ -38,7 +42,7 @@ enum {
     kDaemonTouchpad = 4,
 };
 
-struct AsusSMCMessage {
+struct GramSMCMessage {
     int type;
     int x;
     int y;
@@ -163,7 +167,7 @@ int main(int argc, const char *argv[]) {
         struct kev_vendor_code vendorCode = {0};
 
         // set vendor name string
-        strncpy(vendorCode.vendor_string, "com.hieplpvip", KEV_VENDOR_CODE_MAX_STR_LEN);
+        strncpy(vendorCode.vendor_string, "com.gramsmc", KEV_VENDOR_CODE_MAX_STR_LEN);
 
         // get vendor code
         ioctl(systemSocket, SIOCGKEVVENDOR, &vendorCode);
@@ -185,9 +189,9 @@ int main(int argc, const char *argv[]) {
 
         // message from kext
         // size is cumulation of header, struct, and max length of a proc path
-        char kextMsg[KEV_MSG_HEADER_SIZE + sizeof(struct AsusSMCMessage)] = {0};
+        char kextMsg[KEV_MSG_HEADER_SIZE + sizeof(struct GramSMCMessage)] = {0};
 
-        struct AsusSMCMessage *message = NULL;
+        struct GramSMCMessage *message = NULL;
 
         while (YES) {
             bytesReceived = recv(systemSocket, kextMsg, sizeof(kextMsg), 0);
@@ -200,14 +204,14 @@ int main(int argc, const char *argv[]) {
             // type cast to access kev_event_msg header
             kernEventMsg = (struct kern_event_msg *)kextMsg;
 
-            // only care about events sent by AsusSMC
-            if (AsusSMCEventCode != kernEventMsg->event_code) {
+            // only care about events sent by GramSMC
+            if (GramSMCEventCode != kernEventMsg->event_code) {
                 continue;
             }
 
             // typecast custom data
             // begins right after header
-            message = (struct AsusSMCMessage *)&kernEventMsg->event_data[0];
+            message = (struct GramSMCMessage *)&kernEventMsg->event_data[0];
 
             //printf("type:%d x:%d y:%d\n", message->type, message->x, message->y);
 
