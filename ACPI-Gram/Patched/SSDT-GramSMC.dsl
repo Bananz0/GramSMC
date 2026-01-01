@@ -38,6 +38,11 @@ DefinitionBlock ("", "SSDT", 2, "GRAM", "GramSMC", 0x00001000)
     External (_SB_.PCI0.LPCB.H_EC.ALS, FieldUnitObj)  // Ambient light sensor
     External (ECON, IntObj)                            // EC ready flag
     
+    // External references for LG WMI methods (LGEX0820 device)
+    // These are the native ACPI methods used by LG Control Center
+    External (_SB_.WMAB, MethodObj)    // 3 Args: method, operation (1=GET, 2=SET), value
+    External (_SB_.WMBB, MethodObj)    // 3 Args: ignored, instance, buffer[32]
+    
     // External references for renamed EC query methods
     // These will exist after applying binary patches (_Qxx -> XQxx)
     External (_SB_.PCI0.LPCB.H_EC.XQ50, MethodObj)
@@ -211,6 +216,440 @@ DefinitionBlock ("", "SSDT", 2, "GRAM", "GramSMC", 0x00001000)
             Method (DMES, 0, NotSerialized)
             {
                 Return (One)
+            }
+            
+            // ============================================
+            // LG Control Center Feature Methods
+            // Method IDs from Linux lg-laptop.c kernel driver
+            // ============================================
+            
+            // WMI Method ID Constants
+            Name (WFMD, 0x33)    // WM_FAN_MODE
+            Name (WBLT, 0x61)    // WM_BATT_LIMIT (WMAB)
+            Name (WBBB, 0x10C)   // WMBB_BATT_LIMIT (for 2019+ models)
+            Name (WUSB, 0x10B)   // WMBB_USB_CHARGE
+            Name (WRDM, 0xBF)    // WM_READER_MODE
+            Name (WFNL, 0x407)   // WM_FN_LOCK
+            Name (WKLT, 0x400)   // WM_KEY_LIGHT
+            
+            // Additional method IDs (reverse engineered from LG Control Center)
+            Name (WSMN, 0x114)   // WM_SMART_ON (Instant Boot)
+            Name (WBST, 0xBD)    // WM_BOOST_MODE (Performance boost)
+            Name (WECO, 0xEF)    // WM_ECO_MODE (Power saving)
+            Name (WTPC, 0x40A)   // WM_USB_TYPEC (USB-C mode)
+            Name (WTPB, 0xED)    // WM_USB_TYPEC_BATTERY (USB-C battery level)
+            Name (WWCM, 0x80)    // WM_WEBCAM (Webcam toggle)
+            
+            // Operation constants
+            Name (WGET, One)     // Get operation
+            Name (WSET, 0x02)    // Set operation
+            
+            // ============================================
+            // Fan Mode Control (0=Optimal, 1=Silent, 2=Performance)
+            // ============================================
+            
+            // GFMD - Get Fan Mode
+            // Returns: 0=Optimal, 1=Silent, 2=Performance
+            Method (GFMD, 0, Serialized)
+            {
+                If (CondRefOf (\_SB.WMAB))
+                {
+                    Local0 = \_SB.WMAB (WFMD, WGET, Zero)
+                    If ((ObjectType (Local0) == 0x01))  // Integer
+                    {
+                        Return (Local0 & 0x03)
+                    }
+                    ElseIf ((ObjectType (Local0) == 0x03))  // Buffer
+                    {
+                        Return (DerefOf (Local0 [Zero]) & 0x03)
+                    }
+                }
+                Return (Zero)  // Default: Optimal
+            }
+            
+            // SFMD - Set Fan Mode
+            // Arg0: 0=Optimal, 1=Silent, 2=Performance
+            // Returns: 0 on success
+            Method (SFMD, 1, Serialized)
+            {
+                If ((Arg0 <= 0x02))
+                {
+                    If (CondRefOf (\_SB.WMAB))
+                    {
+                        // Fan mode needs both lower and upper nibble set
+                        Local0 = (Arg0 | (Arg0 << 4))
+                        \_SB.WMAB (WFMD, WSET, Local0)
+                        Return (Zero)
+                    }
+                }
+                Return (One)  // Error
+            }
+            
+            // ============================================
+            // Battery Care Limit (80% or 100%)
+            // ============================================
+            
+            // GBCL - Get Battery Care Limit
+            // Returns: 80 or 100
+            Method (GBCL, 0, Serialized)
+            {
+                // Try WMBB first (for 2019+ models)
+                If (CondRefOf (\_SB.WMBB))
+                {
+                    Local0 = Buffer (0x20) {}
+                    Local0 [Zero] = (WBBB & 0xFF)
+                    Local0 [One] = ((WBBB >> 8) & 0xFF)
+                    Local1 = \_SB.WMBB (Zero, One, Local0)
+                    If ((ObjectType (Local1) == 0x03))  // Buffer
+                    {
+                        Local2 = DerefOf (Local1 [0x10])
+                        If ((Local2 == 0x50) || (Local2 == 0x64))  // 80 or 100
+                        {
+                            Return (Local2)
+                        }
+                    }
+                }
+                // Fallback to WMAB
+                If (CondRefOf (\_SB.WMAB))
+                {
+                    Local0 = \_SB.WMAB (WBLT, WGET, Zero)
+                    If ((ObjectType (Local0) == 0x01))
+                    {
+                        If ((Local0 == 0x50) || (Local0 == 0x64))
+                        {
+                            Return (Local0)
+                        }
+                    }
+                }
+                Return (0x64)  // Default: 100%
+            }
+            
+            // SBCL - Set Battery Care Limit
+            // Arg0: 80 or 100
+            // Returns: 0 on success
+            Method (SBCL, 1, Serialized)
+            {
+                If ((Arg0 == 0x50) || (Arg0 == 0x64))  // 80 or 100
+                {
+                    // Try WMBB first (for 2019+ models)
+                    If (CondRefOf (\_SB.WMBB))
+                    {
+                        Local0 = Buffer (0x20) {}
+                        Local0 [Zero] = (WBBB & 0xFF)
+                        Local0 [One] = ((WBBB >> 8) & 0xFF)
+                        Local0 [0x04] = Arg0
+                        \_SB.WMBB (Zero, One, Local0)
+                        Return (Zero)
+                    }
+                    // Fallback to WMAB
+                    If (CondRefOf (\_SB.WMAB))
+                    {
+                        \_SB.WMAB (WBLT, WSET, Arg0)
+                        Return (Zero)
+                    }
+                }
+                Return (One)  // Error
+            }
+            
+            // ============================================
+            // USB Charging (charge devices when laptop off)
+            // ============================================
+            
+            // GUSC - Get USB Charge State
+            // Returns: 0=off, 1=on
+            Method (GUSC, 0, Serialized)
+            {
+                If (CondRefOf (\_SB.WMBB))
+                {
+                    Local0 = Buffer (0x20) {}
+                    Local0 [Zero] = (WUSB & 0xFF)
+                    Local0 [One] = ((WUSB >> 8) & 0xFF)
+                    Local1 = \_SB.WMBB (Zero, One, Local0)
+                    If ((ObjectType (Local1) == 0x03))  // Buffer
+                    {
+                        Return (DerefOf (Local1 [0x10]) != Zero)
+                    }
+                }
+                Return (Zero)  // Default: off
+            }
+            
+            // SUSC - Set USB Charge State
+            // Arg0: 0=off, 1=on
+            // Returns: 0 on success
+            Method (SUSC, 1, Serialized)
+            {
+                If (CondRefOf (\_SB.WMBB))
+                {
+                    Local0 = Buffer (0x20) {}
+                    Local0 [Zero] = (WUSB & 0xFF)
+                    Local0 [One] = ((WUSB >> 8) & 0xFF)
+                    Local0 [0x04] = (Arg0 != Zero)
+                    \_SB.WMBB (Zero, One, Local0)
+                    Return (Zero)
+                }
+                Return (One)  // Error
+            }
+            
+            // ============================================
+            // Reader Mode (reduce blue light)
+            // ============================================
+            
+            // GRDM - Get Reader Mode State
+            // Returns: 0=off, 1=on
+            Method (GRDM, 0, Serialized)
+            {
+                If (CondRefOf (\_SB.WMAB))
+                {
+                    Local0 = \_SB.WMAB (WRDM, WGET, Zero)
+                    If ((ObjectType (Local0) == 0x01))
+                    {
+                        Return (Local0 != Zero)
+                    }
+                }
+                Return (Zero)  // Default: off
+            }
+            
+            // SRDM - Set Reader Mode State
+            // Arg0: 0=off, 1=on
+            // Returns: 0 on success
+            Method (SRDM, 1, Serialized)
+            {
+                If (CondRefOf (\_SB.WMAB))
+                {
+                    \_SB.WMAB (WRDM, WSET, (Arg0 != Zero))
+                    Return (Zero)
+                }
+                Return (One)  // Error
+            }
+            
+            // ============================================
+            // Fn Lock (swap function key behavior)
+            // ============================================
+            
+            // GFNL - Get Fn Lock State
+            // Returns: 0=off (Fn needed for F1-F12), 1=on (F1-F12 direct)
+            Method (GFNL, 0, Serialized)
+            {
+                If (CondRefOf (\_SB.WMAB))
+                {
+                    Local0 = \_SB.WMAB (WFNL, WGET, Zero)
+                    If ((ObjectType (Local0) == 0x03))  // Buffer
+                    {
+                        Return (DerefOf (Local0 [Zero]) != Zero)
+                    }
+                }
+                Return (Zero)  // Default: off
+            }
+            
+            // SFNL - Set Fn Lock State
+            // Arg0: 0=off, 1=on
+            // Returns: 0 on success
+            Method (SFNL, 1, Serialized)
+            {
+                If (CondRefOf (\_SB.WMAB))
+                {
+                    \_SB.WMAB (WFNL, WSET, (Arg0 != Zero))
+                    Return (Zero)
+                }
+                Return (One)  // Error
+            }
+            
+            // ============================================
+            // Feature Support Detection
+            // ============================================
+            
+            // ============================================
+            // SmartOn (Instant Boot) - Fast wake from sleep
+            // ============================================
+            
+            // GSMN - Get SmartOn State
+            // Returns: 0=off, 1=on
+            Method (GSMN, 0, Serialized)
+            {
+                If (CondRefOf (\_SB.WMAB))
+                {
+                    Local0 = \_SB.WMAB (WSMN, WGET, Zero)
+                    If ((ObjectType (Local0) == 0x01))
+                    {
+                        Return (Local0 != Zero)
+                    }
+                }
+                Return (Zero)
+            }
+            
+            // SSMN - Set SmartOn State
+            // Arg0: 0=off, 1=on
+            Method (SSMN, 1, Serialized)
+            {
+                If (CondRefOf (\_SB.WMAB))
+                {
+                    \_SB.WMAB (WSMN, WSET, (Arg0 != Zero))
+                    Return (Zero)
+                }
+                Return (One)
+            }
+            
+            // ============================================
+            // Boost Mode (Performance boost)
+            // ============================================
+            
+            // GBST - Get Boost Mode State
+            // Returns: 0=off, 1=on
+            Method (GBST, 0, Serialized)
+            {
+                If (CondRefOf (\_SB.WMAB))
+                {
+                    Local0 = \_SB.WMAB (WBST, WGET, Zero)
+                    If ((ObjectType (Local0) == 0x01))
+                    {
+                        Return (Local0 != Zero)
+                    }
+                }
+                Return (Zero)
+            }
+            
+            // SBST - Set Boost Mode State  
+            // Arg0: 0=off, 1=on
+            Method (SBST, 1, Serialized)
+            {
+                If (CondRefOf (\_SB.WMAB))
+                {
+                    \_SB.WMAB (WBST, WSET, (Arg0 != Zero))
+                    Return (Zero)
+                }
+                Return (One)
+            }
+            
+            // ============================================
+            // Eco Mode (Power saving)
+            // ============================================
+            
+            // GECO - Get Eco Mode State
+            // Returns: 0=off, 1=on
+            Method (GECO, 0, Serialized)
+            {
+                If (CondRefOf (\_SB.WMAB))
+                {
+                    Local0 = \_SB.WMAB (WECO, WGET, Zero)
+                    If ((ObjectType (Local0) == 0x01))
+                    {
+                        Return (Local0 != Zero)
+                    }
+                }
+                Return (Zero)
+            }
+            
+            // SECO - Set Eco Mode State
+            // Arg0: 0=off, 1=on
+            Method (SECO, 1, Serialized)
+            {
+                If (CondRefOf (\_SB.WMAB))
+                {
+                    \_SB.WMAB (WECO, WSET, (Arg0 != Zero))
+                    Return (Zero)
+                }
+                Return (One)
+            }
+            
+            // ============================================
+            // USB Type-C Mode
+            // ============================================
+            
+            // GTPC - Get USB Type-C Mode
+            // Returns: mode value
+            Method (GTPC, 0, Serialized)
+            {
+                If (CondRefOf (\_SB.WMAB))
+                {
+                    Local0 = \_SB.WMAB (WTPC, WGET, Zero)
+                    If ((ObjectType (Local0) == 0x01))
+                    {
+                        Return (Local0)
+                    }
+                }
+                Return (Zero)
+            }
+            
+            // STPC - Set USB Type-C Mode
+            // Arg0: mode value
+            Method (STPC, 1, Serialized)
+            {
+                If (CondRefOf (\_SB.WMAB))
+                {
+                    \_SB.WMAB (WTPC, WSET, Arg0)
+                    Return (Zero)
+                }
+                Return (One)
+            }
+            
+            // ============================================
+            // Webcam Toggle
+            // ============================================
+            
+            // GWCM - Get Webcam State
+            // Returns: 0=disabled, 1=enabled
+            Method (GWCM, 0, Serialized)
+            {
+                If (CondRefOf (\_SB.WMAB))
+                {
+                    Local0 = \_SB.WMAB (WWCM, WGET, Zero)
+                    If ((ObjectType (Local0) == 0x01))
+                    {
+                        Return (Local0 != Zero)
+                    }
+                }
+                Return (One)  // Default: enabled
+            }
+            
+            // SWCM - Set Webcam State
+            // Arg0: 0=disabled, 1=enabled
+            Method (SWCM, 1, Serialized)
+            {
+                If (CondRefOf (\_SB.WMAB))
+                {
+                    \_SB.WMAB (WWCM, WSET, (Arg0 != Zero))
+                    Return (Zero)
+                }
+                Return (One)
+            }
+            
+            // ============================================
+            // Feature Support Detection
+            // ============================================
+            
+            // GCAP - Get Capabilities
+            // Returns bitmask of supported features:
+            //   Bit 0: Fan Mode
+            //   Bit 1: Battery Care Limit
+            //   Bit 2: USB Charging
+            //   Bit 3: Reader Mode
+            //   Bit 4: Fn Lock
+            //   Bit 5: SmartOn (Instant Boot)
+            //   Bit 6: Boost Mode
+            //   Bit 7: Eco Mode
+            //   Bit 8: USB Type-C
+            //   Bit 9: Webcam
+            Method (GCAP, 0, Serialized)
+            {
+                Local0 = Zero
+                If (CondRefOf (\_SB.WMAB))
+                {
+                    Local0 |= 0x01   // Fan Mode
+                    Local0 |= 0x02   // Battery Care
+                    Local0 |= 0x08   // Reader Mode
+                    Local0 |= 0x10   // Fn Lock
+                    Local0 |= 0x20   // SmartOn
+                    Local0 |= 0x40   // Boost Mode
+                    Local0 |= 0x80   // Eco Mode
+                    Local0 |= 0x100  // USB Type-C
+                    Local0 |= 0x200  // Webcam
+                }
+                If (CondRefOf (\_SB.WMBB))
+                {
+                    Local0 |= 0x02   // Battery Care (WMBB variant)
+                    Local0 |= 0x04   // USB Charging
+                }
+                Return (Local0)
             }
         }
     }

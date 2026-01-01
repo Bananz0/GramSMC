@@ -36,10 +36,53 @@
 #define GRAM_EVENT_KBBL_UP         0xC4
 #define GRAM_EVENT_KBBL_DOWN       0xC5
 #define GRAM_EVENT_SLEEP           0x5E
+#define GRAM_EVENT_FAN_MODE        0x70    // Fan mode toggle (Fn+Q)
+
+// LG Control Center WMI Method IDs (from Linux lg-laptop.c)
+#define WM_FAN_MODE                0x33    // 0=Optimal, 1=Silent, 2=Performance
+#define WM_BATT_LIMIT              0x61    // WMAB: 80 or 100
+#define WMBB_BATT_LIMIT            0x10C   // WMBB: for 2019+ models
+#define WMBB_USB_CHARGE            0x10B   // 0=off, 1=on
+#define WM_READER_MODE             0xBF    // 0=off, 1=on
+#define WM_FN_LOCK                 0x407   // 0=off, 1=on
+#define WM_KEY_LIGHT               0x400   // Keyboard backlight
+
+// Additional method IDs (reverse engineered from LG Control Center DLLs)
+#define WM_SMART_ON                0x114   // Instant Boot
+#define WM_BOOST_MODE              0xBD    // Performance boost
+#define WM_ECO_MODE                0xEF    // Power saving
+#define WM_USB_TYPEC               0x40A   // USB Type-C mode
+#define WM_USB_TYPEC_BATTERY       0xED    // USB Type-C battery level
+#define WM_WEBCAM                  0x80    // Webcam toggle
+
+// WMI operation constants
+#define WM_GET                     1
+#define WM_SET                     2
 
 #define kDeliverNotifications "RM,deliverNotifications"
 
 #define GramSMCEventCode 0x80
+
+// Fan mode constants
+enum GramFanMode {
+    kFanModeOptimal = 0,
+    kFanModeSilent = 1,
+    kFanModePerformance = 2
+};
+
+// Feature capability bitmask
+enum GramCapabilities {
+    kCapFanMode = 0x01,
+    kCapBatteryCare = 0x02,
+    kCapUSBCharging = 0x04,
+    kCapReaderMode = 0x08,
+    kCapFnLock = 0x10,
+    kCapSmartOn = 0x20,
+    kCapBoostMode = 0x40,
+    kCapEcoMode = 0x80,
+    kCapUSBTypeC = 0x100,
+    kCapWebcam = 0x200
+};
 
 class GramSMC : public IOService {
     OSDeclareDefaultStructors(GramSMC)
@@ -74,6 +117,16 @@ private:
         kDaemonAirplaneMode = 2,
         kDaemonSleep = 3,
         kDaemonTouchpad = 4,
+        kDaemonFanMode = 5,
+        kDaemonBatteryCare = 6,
+        kDaemonUSBCharging = 7,
+        kDaemonReaderMode = 8,
+        kDaemonFnLock = 9,
+        kDaemonSmartOn = 10,
+        kDaemonBoostMode = 11,
+        kDaemonEcoMode = 12,
+        kDaemonUSBTypeC = 13,
+        kDaemonWebcam = 14,
     };
 
     static constexpr uint32_t SensorUpdateTimeoutMS {1000};
@@ -135,6 +188,68 @@ private:
     // Keyboard backlight control via ACPI
     uint32_t getKeyboardBacklight();
     void setKeyboardBacklight(uint32_t level);
+    
+    // ============================================
+    // LG Control Center Feature Methods
+    // ============================================
+    
+    // Fan mode control (0=Optimal, 1=Silent, 2=Performance)
+    uint32_t getFanMode();
+    void setFanMode(uint32_t mode);
+    void cycleFanMode();  // For hotkey support
+    
+    // Battery care limit (80% or 100%)
+    uint32_t getBatteryCareLimit();
+    void setBatteryCareLimit(uint32_t limit);
+    
+    // USB charging when laptop is off
+    bool getUSBCharging();
+    void setUSBCharging(bool enabled);
+    
+    // Reader mode (reduce blue light)
+    bool getReaderMode();
+    void setReaderMode(bool enabled);
+    void toggleReaderMode();  // For hotkey support
+    
+    // Fn lock (swap function key behavior)
+    bool getFnLock();
+    void setFnLock(bool enabled);
+    
+    // Get supported features bitmask
+    uint32_t getCapabilities();
+    
+    // SmartOn (Instant Boot) - fast wake from sleep
+    bool getSmartOn();
+    void setSmartOn(bool enabled);
+    
+    // Boost Mode - performance boost
+    bool getBoostMode();
+    void setBoostMode(bool enabled);
+    
+    // Eco Mode - power saving
+    bool getEcoMode();
+    void setEcoMode(bool enabled);
+    
+    // USB Type-C mode
+    uint32_t getUSBTypeC();
+    void setUSBTypeC(uint32_t mode);
+    
+    // Webcam toggle
+    bool getWebcam();
+    void setWebcam(bool enabled);
+    
+    // Current state cache
+    uint32_t currentFanMode {kFanModeOptimal};
+    uint32_t currentBatteryCareLimit {100};
+    bool currentUSBCharging {false};
+    bool currentReaderMode {false};
+    bool currentFnLock {false};
+    bool currentSmartOn {false};
+    bool currentBoostMode {false};
+    bool currentEcoMode {false};
+    uint32_t currentUSBTypeC {0};
+    bool currentWebcam {true};
+    uint32_t capabilities {0};
 
     IOReturn postKeyboardInputReport(const void *report, uint32_t reportSize);
     void dispatchCSMRReport(int code, int loop = 1);

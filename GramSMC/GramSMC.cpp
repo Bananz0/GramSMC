@@ -103,6 +103,71 @@ bool GramSMC::start(IOService *provider) {
 
     registerVSMC();
 
+    // Initialize LG Control Center feature states
+    capabilities = getCapabilities();
+    setProperty("Capabilities", capabilities, 32);
+    SYSLOG("gram", "Detected capabilities: 0x%02X", capabilities);
+    
+    if (capabilities & kCapFanMode) {
+        currentFanMode = getFanMode();
+        setProperty("FanMode", currentFanMode, 32);
+        SYSLOG("gram", "Fan mode: %u", currentFanMode);
+    }
+    
+    if (capabilities & kCapBatteryCare) {
+        currentBatteryCareLimit = getBatteryCareLimit();
+        setProperty("BatteryCareLimit", currentBatteryCareLimit, 32);
+        SYSLOG("gram", "Battery care limit: %u%%", currentBatteryCareLimit);
+    }
+    
+    if (capabilities & kCapUSBCharging) {
+        currentUSBCharging = getUSBCharging();
+        setProperty("USBCharging", currentUSBCharging);
+        SYSLOG("gram", "USB charging: %s", currentUSBCharging ? "enabled" : "disabled");
+    }
+    
+    if (capabilities & kCapReaderMode) {
+        currentReaderMode = getReaderMode();
+        setProperty("ReaderMode", currentReaderMode);
+        SYSLOG("gram", "Reader mode: %s", currentReaderMode ? "enabled" : "disabled");
+    }
+    
+    if (capabilities & kCapFnLock) {
+        currentFnLock = getFnLock();
+        setProperty("FnLock", currentFnLock);
+        SYSLOG("gram", "Fn lock: %s", currentFnLock ? "enabled" : "disabled");
+    }
+    
+    if (capabilities & kCapSmartOn) {
+        currentSmartOn = getSmartOn();
+        setProperty("SmartOn", currentSmartOn);
+        SYSLOG("gram", "SmartOn (Instant Boot): %s", currentSmartOn ? "enabled" : "disabled");
+    }
+    
+    if (capabilities & kCapBoostMode) {
+        currentBoostMode = getBoostMode();
+        setProperty("BoostMode", currentBoostMode);
+        SYSLOG("gram", "Boost mode: %s", currentBoostMode ? "enabled" : "disabled");
+    }
+    
+    if (capabilities & kCapEcoMode) {
+        currentEcoMode = getEcoMode();
+        setProperty("EcoMode", currentEcoMode);
+        SYSLOG("gram", "Eco mode: %s", currentEcoMode ? "enabled" : "disabled");
+    }
+    
+    if (capabilities & kCapUSBTypeC) {
+        currentUSBTypeC = getUSBTypeC();
+        setProperty("USBTypeC", currentUSBTypeC, 32);
+        SYSLOG("gram", "USB Type-C mode: %u", currentUSBTypeC);
+    }
+    
+    if (capabilities & kCapWebcam) {
+        currentWebcam = getWebcam();
+        setProperty("Webcam", currentWebcam);
+        SYSLOG("gram", "Webcam: %s", currentWebcam ? "enabled" : "disabled");
+    }
+
     registerService();
 
     return true;
@@ -383,6 +448,236 @@ void GramSMC::setKeyboardBacklight(uint32_t level) {
     }
 }
 
+// ============================================
+// LG Control Center Feature Implementation
+// ============================================
+
+uint32_t GramSMC::getCapabilities() {
+    uint32_t caps = 0;
+    if (gramDevice && gramDevice->evaluateInteger("GCAP", &caps) == kIOReturnSuccess) {
+        return caps;
+    }
+    return 0;
+}
+
+uint32_t GramSMC::getFanMode() {
+    uint32_t mode = 0;
+    if (gramDevice && gramDevice->evaluateInteger("GFMD", &mode) == kIOReturnSuccess) {
+        currentFanMode = mode;
+        return mode;
+    }
+    return currentFanMode;
+}
+
+void GramSMC::setFanMode(uint32_t mode) {
+    if (gramDevice && mode <= kFanModePerformance) {
+        OSNumber *arg = OSNumber::withNumber(mode, 32);
+        gramDevice->evaluateObject("SFMD", NULL, (OSObject **)&arg, 1);
+        arg->release();
+        currentFanMode = mode;
+        setProperty("FanMode", mode, 32);
+        DBGLOG("gram", "Fan mode set to %u (%s)", mode,
+               mode == kFanModeOptimal ? "Optimal" :
+               mode == kFanModeSilent ? "Silent" : "Performance");
+    }
+}
+
+void GramSMC::cycleFanMode() {
+    uint32_t newMode = (getFanMode() + 1) % 3;
+    setFanMode(newMode);
+    kev.sendMessage(kDaemonFanMode, newMode, 0);
+}
+
+uint32_t GramSMC::getBatteryCareLimit() {
+    uint32_t limit = 100;
+    if (gramDevice && gramDevice->evaluateInteger("GBCL", &limit) == kIOReturnSuccess) {
+        currentBatteryCareLimit = limit;
+        return limit;
+    }
+    return currentBatteryCareLimit;
+}
+
+void GramSMC::setBatteryCareLimit(uint32_t limit) {
+    if (gramDevice && (limit == 80 || limit == 100)) {
+        OSNumber *arg = OSNumber::withNumber(limit, 32);
+        gramDevice->evaluateObject("SBCL", NULL, (OSObject **)&arg, 1);
+        arg->release();
+        currentBatteryCareLimit = limit;
+        setProperty("BatteryCareLimit", limit, 32);
+        DBGLOG("gram", "Battery care limit set to %u%%", limit);
+    }
+}
+
+bool GramSMC::getUSBCharging() {
+    uint32_t state = 0;
+    if (gramDevice && gramDevice->evaluateInteger("GUSC", &state) == kIOReturnSuccess) {
+        currentUSBCharging = (state != 0);
+        return currentUSBCharging;
+    }
+    return currentUSBCharging;
+}
+
+void GramSMC::setUSBCharging(bool enabled) {
+    if (gramDevice) {
+        OSNumber *arg = OSNumber::withNumber(enabled ? 1 : 0, 32);
+        gramDevice->evaluateObject("SUSC", NULL, (OSObject **)&arg, 1);
+        arg->release();
+        currentUSBCharging = enabled;
+        setProperty("USBCharging", enabled);
+        DBGLOG("gram", "USB charging %s", enabled ? "enabled" : "disabled");
+    }
+}
+
+bool GramSMC::getReaderMode() {
+    uint32_t state = 0;
+    if (gramDevice && gramDevice->evaluateInteger("GRDM", &state) == kIOReturnSuccess) {
+        currentReaderMode = (state != 0);
+        return currentReaderMode;
+    }
+    return currentReaderMode;
+}
+
+void GramSMC::setReaderMode(bool enabled) {
+    if (gramDevice) {
+        OSNumber *arg = OSNumber::withNumber(enabled ? 1 : 0, 32);
+        gramDevice->evaluateObject("SRDM", NULL, (OSObject **)&arg, 1);
+        arg->release();
+        currentReaderMode = enabled;
+        setProperty("ReaderMode", enabled);
+        DBGLOG("gram", "Reader mode %s", enabled ? "enabled" : "disabled");
+    }
+}
+
+void GramSMC::toggleReaderMode() {
+    bool newState = !getReaderMode();
+    setReaderMode(newState);
+    kev.sendMessage(kDaemonReaderMode, newState ? 1 : 0, 0);
+}
+
+bool GramSMC::getFnLock() {
+    uint32_t state = 0;
+    if (gramDevice && gramDevice->evaluateInteger("GFNL", &state) == kIOReturnSuccess) {
+        currentFnLock = (state != 0);
+        return currentFnLock;
+    }
+    return currentFnLock;
+}
+
+void GramSMC::setFnLock(bool enabled) {
+    if (gramDevice) {
+        OSNumber *arg = OSNumber::withNumber(enabled ? 1 : 0, 32);
+        gramDevice->evaluateObject("SFNL", NULL, (OSObject **)&arg, 1);
+        arg->release();
+        currentFnLock = enabled;
+        setProperty("FnLock", enabled);
+        DBGLOG("gram", "Fn lock %s", enabled ? "enabled" : "disabled");
+    }
+}
+
+// ============================================
+// Additional LG Control Center Features
+// ============================================
+
+bool GramSMC::getSmartOn() {
+    uint32_t state = 0;
+    if (gramDevice && gramDevice->evaluateInteger("GSMN", &state) == kIOReturnSuccess) {
+        currentSmartOn = (state != 0);
+        return currentSmartOn;
+    }
+    return currentSmartOn;
+}
+
+void GramSMC::setSmartOn(bool enabled) {
+    if (gramDevice) {
+        OSNumber *arg = OSNumber::withNumber(enabled ? 1 : 0, 32);
+        gramDevice->evaluateObject("SSMN", NULL, (OSObject **)&arg, 1);
+        arg->release();
+        currentSmartOn = enabled;
+        setProperty("SmartOn", enabled);
+        DBGLOG("gram", "SmartOn (Instant Boot) %s", enabled ? "enabled" : "disabled");
+    }
+}
+
+bool GramSMC::getBoostMode() {
+    uint32_t state = 0;
+    if (gramDevice && gramDevice->evaluateInteger("GBST", &state) == kIOReturnSuccess) {
+        currentBoostMode = (state != 0);
+        return currentBoostMode;
+    }
+    return currentBoostMode;
+}
+
+void GramSMC::setBoostMode(bool enabled) {
+    if (gramDevice) {
+        OSNumber *arg = OSNumber::withNumber(enabled ? 1 : 0, 32);
+        gramDevice->evaluateObject("SBST", NULL, (OSObject **)&arg, 1);
+        arg->release();
+        currentBoostMode = enabled;
+        setProperty("BoostMode", enabled);
+        DBGLOG("gram", "Boost mode %s", enabled ? "enabled" : "disabled");
+    }
+}
+
+bool GramSMC::getEcoMode() {
+    uint32_t state = 0;
+    if (gramDevice && gramDevice->evaluateInteger("GECO", &state) == kIOReturnSuccess) {
+        currentEcoMode = (state != 0);
+        return currentEcoMode;
+    }
+    return currentEcoMode;
+}
+
+void GramSMC::setEcoMode(bool enabled) {
+    if (gramDevice) {
+        OSNumber *arg = OSNumber::withNumber(enabled ? 1 : 0, 32);
+        gramDevice->evaluateObject("SECO", NULL, (OSObject **)&arg, 1);
+        arg->release();
+        currentEcoMode = enabled;
+        setProperty("EcoMode", enabled);
+        DBGLOG("gram", "Eco mode %s", enabled ? "enabled" : "disabled");
+    }
+}
+
+uint32_t GramSMC::getUSBTypeC() {
+    uint32_t mode = 0;
+    if (gramDevice && gramDevice->evaluateInteger("GTPC", &mode) == kIOReturnSuccess) {
+        currentUSBTypeC = mode;
+        return mode;
+    }
+    return currentUSBTypeC;
+}
+
+void GramSMC::setUSBTypeC(uint32_t mode) {
+    if (gramDevice) {
+        OSNumber *arg = OSNumber::withNumber(mode, 32);
+        gramDevice->evaluateObject("STPC", NULL, (OSObject **)&arg, 1);
+        arg->release();
+        currentUSBTypeC = mode;
+        setProperty("USBTypeC", mode, 32);
+        DBGLOG("gram", "USB Type-C mode set to %u", mode);
+    }
+}
+
+bool GramSMC::getWebcam() {
+    uint32_t state = 1;  // Default enabled
+    if (gramDevice && gramDevice->evaluateInteger("GWCM", &state) == kIOReturnSuccess) {
+        currentWebcam = (state != 0);
+        return currentWebcam;
+    }
+    return currentWebcam;
+}
+
+void GramSMC::setWebcam(bool enabled) {
+    if (gramDevice) {
+        OSNumber *arg = OSNumber::withNumber(enabled ? 1 : 0, 32);
+        gramDevice->evaluateObject("SWCM", NULL, (OSObject **)&arg, 1);
+        arg->release();
+        currentWebcam = enabled;
+        setProperty("Webcam", enabled);
+        DBGLOG("gram", "Webcam %s", enabled ? "enabled" : "disabled");
+    }
+}
+
 void GramSMC::handleMessage(int code) {
     switch (code) {
         // LG Gram specific event codes from SSDT-GramSMC
@@ -432,6 +727,14 @@ void GramSMC::handleMessage(int code) {
 
         case 0x7D: // Airplane mode
             toggleAirplaneMode();
+            break;
+
+        case GRAM_EVENT_FAN_MODE: // 0x70 - Fan mode toggle (Fn+Q)
+            cycleFanMode();
+            break;
+
+        case 0xF9: // Reader mode toggle (Fn+F9)
+            toggleReaderMode();
             break;
 
         default:
