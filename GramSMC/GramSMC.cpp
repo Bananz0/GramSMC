@@ -138,30 +138,6 @@ bool GramSMC::start(IOService *provider) {
         SYSLOG("gram", "Fn lock: %s", currentFnLock ? "enabled" : "disabled");
     }
     
-    if (capabilities & kCapSmartOn) {
-        currentSmartOn = getSmartOn();
-        setProperty("SmartOn", currentSmartOn);
-        SYSLOG("gram", "SmartOn (Instant Boot): %s", currentSmartOn ? "enabled" : "disabled");
-    }
-    
-    if (capabilities & kCapBoostMode) {
-        currentBoostMode = getBoostMode();
-        setProperty("BoostMode", currentBoostMode);
-        SYSLOG("gram", "Boost mode: %s", currentBoostMode ? "enabled" : "disabled");
-    }
-    
-    if (capabilities & kCapEcoMode) {
-        currentEcoMode = getEcoMode();
-        setProperty("EcoMode", currentEcoMode);
-        SYSLOG("gram", "Eco mode: %s", currentEcoMode ? "enabled" : "disabled");
-    }
-    
-    if (capabilities & kCapUSBTypeC) {
-        currentUSBTypeC = getUSBTypeC();
-        setProperty("USBTypeC", currentUSBTypeC, 32);
-        SYSLOG("gram", "USB Type-C mode: %u", currentUSBTypeC);
-    }
-    
     if (capabilities & kCapWebcam) {
         currentWebcam = getWebcam();
         setProperty("Webcam", currentWebcam);
@@ -576,87 +552,8 @@ void GramSMC::setFnLock(bool enabled) {
 
 // ============================================
 // Additional LG Control Center Features
+// (Only webcam - other features not in DSDT)
 // ============================================
-
-bool GramSMC::getSmartOn() {
-    uint32_t state = 0;
-    if (gramDevice && gramDevice->evaluateInteger("GSMN", &state) == kIOReturnSuccess) {
-        currentSmartOn = (state != 0);
-        return currentSmartOn;
-    }
-    return currentSmartOn;
-}
-
-void GramSMC::setSmartOn(bool enabled) {
-    if (gramDevice) {
-        OSNumber *arg = OSNumber::withNumber(enabled ? 1 : 0, 32);
-        gramDevice->evaluateObject("SSMN", NULL, (OSObject **)&arg, 1);
-        arg->release();
-        currentSmartOn = enabled;
-        setProperty("SmartOn", enabled);
-        DBGLOG("gram", "SmartOn (Instant Boot) %s", enabled ? "enabled" : "disabled");
-    }
-}
-
-bool GramSMC::getBoostMode() {
-    uint32_t state = 0;
-    if (gramDevice && gramDevice->evaluateInteger("GBST", &state) == kIOReturnSuccess) {
-        currentBoostMode = (state != 0);
-        return currentBoostMode;
-    }
-    return currentBoostMode;
-}
-
-void GramSMC::setBoostMode(bool enabled) {
-    if (gramDevice) {
-        OSNumber *arg = OSNumber::withNumber(enabled ? 1 : 0, 32);
-        gramDevice->evaluateObject("SBST", NULL, (OSObject **)&arg, 1);
-        arg->release();
-        currentBoostMode = enabled;
-        setProperty("BoostMode", enabled);
-        DBGLOG("gram", "Boost mode %s", enabled ? "enabled" : "disabled");
-    }
-}
-
-bool GramSMC::getEcoMode() {
-    uint32_t state = 0;
-    if (gramDevice && gramDevice->evaluateInteger("GECO", &state) == kIOReturnSuccess) {
-        currentEcoMode = (state != 0);
-        return currentEcoMode;
-    }
-    return currentEcoMode;
-}
-
-void GramSMC::setEcoMode(bool enabled) {
-    if (gramDevice) {
-        OSNumber *arg = OSNumber::withNumber(enabled ? 1 : 0, 32);
-        gramDevice->evaluateObject("SECO", NULL, (OSObject **)&arg, 1);
-        arg->release();
-        currentEcoMode = enabled;
-        setProperty("EcoMode", enabled);
-        DBGLOG("gram", "Eco mode %s", enabled ? "enabled" : "disabled");
-    }
-}
-
-uint32_t GramSMC::getUSBTypeC() {
-    uint32_t mode = 0;
-    if (gramDevice && gramDevice->evaluateInteger("GTPC", &mode) == kIOReturnSuccess) {
-        currentUSBTypeC = mode;
-        return mode;
-    }
-    return currentUSBTypeC;
-}
-
-void GramSMC::setUSBTypeC(uint32_t mode) {
-    if (gramDevice) {
-        OSNumber *arg = OSNumber::withNumber(mode, 32);
-        gramDevice->evaluateObject("STPC", NULL, (OSObject **)&arg, 1);
-        arg->release();
-        currentUSBTypeC = mode;
-        setProperty("USBTypeC", mode, 32);
-        DBGLOG("gram", "USB Type-C mode set to %u", mode);
-    }
-}
 
 bool GramSMC::getWebcam() {
     uint32_t state = 1;  // Default enabled

@@ -38,10 +38,22 @@ DefinitionBlock ("", "SSDT", 2, "GRAM", "GramSMC", 0x00001000)
     External (_SB_.PCI0.LPCB.H_EC.ALS, FieldUnitObj)  // Ambient light sensor
     External (ECON, IntObj)                            // EC ready flag
     
-    // External references for LG WMI methods (LGEX0820 device)
-    // These are the native ACPI methods used by LG Control Center
-    External (_SB_.WMAB, MethodObj)    // 3 Args: method, operation (1=GET, 2=SET), value
-    External (_SB_.WMBB, MethodObj)    // 3 Args: ignored, instance, buffer[32]
+    // External references for LG Control Center EC registers (from DSDT analysis)
+    External (_SB_.PCI0.LPCB.H_EC.DFAN, FieldUnitObj) // Fan mode (0xCC)
+    External (_SB_.PCI0.LPCB.H_EC.FNLK, FieldUnitObj) // Fn lock (0x73 bit 2)
+    External (_SB_.PCI0.LPCB.H_EC.RDMD, FieldUnitObj) // Reader mode (0x64 bit 7)
+    External (_SB_.PCI0.LPCB.H_EC.BMB1, FieldUnitObj) // Battery care limit (0xB9)
+    External (_SB_.PCI0.LPCB.H_EC.USCC, FieldUnitObj) // USB charging (0xBE bit 0)
+    External (_SB_.PCI0.LPCB.H_EC.CAMA, FieldUnitObj) // Webcam toggle (0xC0 bit 5)
+    External (_SB_.PCI0.LPCB.H_EC.ACP, FieldUnitObj)  // AC power state
+    External (_SB_.PCI0.LPCB.H_EC.TMP1, FieldUnitObj) // CPU temp (0xC8)
+    
+    // External references for DSDT-defined N-methods (optional, for compatibility)
+    External (N01T, MethodObj)    // Get fan mode
+    External (N01U, MethodObj)    // Set fan mode
+    External (N01G, MethodObj)    // Get Fn lock
+    External (N01H, MethodObj)    // Set Fn lock
+    External (N02K, MethodObj)    // Get/Set battery care
     
     // External references for renamed EC query methods
     // These will exist after applying binary patches (_Qxx -> XQxx)
@@ -220,48 +232,38 @@ DefinitionBlock ("", "SSDT", 2, "GRAM", "GramSMC", 0x00001000)
             
             // ============================================
             // LG Control Center Feature Methods
-            // Method IDs from Linux lg-laptop.c kernel driver
+            // Direct EC access based on DSDT analysis
             // ============================================
             
-            // WMI Method ID Constants
-            Name (WFMD, 0x33)    // WM_FAN_MODE
-            Name (WBLT, 0x61)    // WM_BATT_LIMIT (WMAB)
-            Name (WBBB, 0x10C)   // WMBB_BATT_LIMIT (for 2019+ models)
-            Name (WUSB, 0x10B)   // WMBB_USB_CHARGE
-            Name (WRDM, 0xBF)    // WM_READER_MODE
-            Name (WFNL, 0x407)   // WM_FN_LOCK
-            Name (WKLT, 0x400)   // WM_KEY_LIGHT
-            
-            // Additional method IDs (reverse engineered from LG Control Center)
-            Name (WSMN, 0x114)   // WM_SMART_ON (Instant Boot)
-            Name (WBST, 0xBD)    // WM_BOOST_MODE (Performance boost)
-            Name (WECO, 0xEF)    // WM_ECO_MODE (Power saving)
-            Name (WTPC, 0x40A)   // WM_USB_TYPEC (USB-C mode)
-            Name (WTPB, 0xED)    // WM_USB_TYPEC_BATTERY (USB-C battery level)
-            Name (WWCM, 0x80)    // WM_WEBCAM (Webcam toggle)
-            
-            // Operation constants
-            Name (WGET, One)     // Get operation
-            Name (WSET, 0x02)    // Set operation
+            // EC Register Reference (for documentation)
+            // DFAN (0xCC) - Fan mode, 8-bit: lower nibble = DC mode, upper nibble = AC mode
+            // FNLK (0x73 bit 2) - Fn lock state
+            // RDMD (0x64 bit 7) - Reader mode
+            // BMB1 (0xB9) - Battery care limit (80 or 100)
+            // USCC (0xBE bit 0) - USB charging when powered off
+            // CAMA (0xC0 bit 5) - Webcam enable
             
             // ============================================
             // Fan Mode Control (0=Optimal, 1=Silent, 2=Performance)
+            // Uses EC register DFAN directly like DSDT N01T/N01U methods
             // ============================================
             
             // GFMD - Get Fan Mode
-            // Returns: 0=Optimal, 1=Silent, 2=Performance
+            // Returns: lower nibble of fan mode (0-2)
             Method (GFMD, 0, Serialized)
             {
-                If (CondRefOf (\_SB.WMAB))
+                If ((ECON == One))
                 {
-                    Local0 = \_SB.WMAB (WFMD, WGET, Zero)
-                    If ((ObjectType (Local0) == 0x01))  // Integer
+                    // Read DFAN register, extract mode based on AC power state
+                    Local0 = \_SB.PCI0.LPCB.H_EC.ECRD (RefOf (\_SB.PCI0.LPCB.H_EC.DFAN))
+                    Local1 = \_SB.PCI0.LPCB.H_EC.ECRD (RefOf (\_SB.PCI0.LPCB.H_EC.ACP))
+                    If (Local1)  // AC powered
+                    {
+                        Return ((Local0 >> 4) & 0x03)
+                    }
+                    Else  // Battery
                     {
                         Return (Local0 & 0x03)
-                    }
-                    ElseIf ((ObjectType (Local0) == 0x03))  // Buffer
-                    {
-                        Return (DerefOf (Local0 [Zero]) & 0x03)
                     }
                 }
                 Return (Zero)  // Default: Optimal
@@ -272,15 +274,12 @@ DefinitionBlock ("", "SSDT", 2, "GRAM", "GramSMC", 0x00001000)
             // Returns: 0 on success
             Method (SFMD, 1, Serialized)
             {
-                If ((Arg0 <= 0x02))
+                If ((ECON == One) && (Arg0 <= 0x02))
                 {
-                    If (CondRefOf (\_SB.WMAB))
-                    {
-                        // Fan mode needs both lower and upper nibble set
-                        Local0 = (Arg0 | (Arg0 << 4))
-                        \_SB.WMAB (WFMD, WSET, Local0)
-                        Return (Zero)
-                    }
+                    // Set both nibbles to same value (like DSDT N047)
+                    Local0 = (Arg0 | (Arg0 << 4))
+                    \_SB.PCI0.LPCB.H_EC.ECWT (Local0, RefOf (\_SB.PCI0.LPCB.H_EC.DFAN))
+                    Return (Zero)
                 }
                 Return (One)  // Error
             }
@@ -289,36 +288,21 @@ DefinitionBlock ("", "SSDT", 2, "GRAM", "GramSMC", 0x00001000)
             // Battery Care Limit (80% or 100%)
             // ============================================
             
+            // ============================================
+            // Battery Care Limit (extend battery lifespan)
+            // Uses EC register BMB1 directly like DSDT N02K method
+            // ============================================
+            
             // GBCL - Get Battery Care Limit
             // Returns: 80 or 100
             Method (GBCL, 0, Serialized)
             {
-                // Try WMBB first (for 2019+ models)
-                If (CondRefOf (\_SB.WMBB))
+                If ((ECON == One))
                 {
-                    Local0 = Buffer (0x20) {}
-                    Local0 [Zero] = (WBBB & 0xFF)
-                    Local0 [One] = ((WBBB >> 8) & 0xFF)
-                    Local1 = \_SB.WMBB (Zero, One, Local0)
-                    If ((ObjectType (Local1) == 0x03))  // Buffer
+                    Local0 = \_SB.PCI0.LPCB.H_EC.ECRD (RefOf (\_SB.PCI0.LPCB.H_EC.BMB1))
+                    If ((Local0 == 0x50) || (Local0 == 0x64))  // 80 or 100
                     {
-                        Local2 = DerefOf (Local1 [0x10])
-                        If ((Local2 == 0x50) || (Local2 == 0x64))  // 80 or 100
-                        {
-                            Return (Local2)
-                        }
-                    }
-                }
-                // Fallback to WMAB
-                If (CondRefOf (\_SB.WMAB))
-                {
-                    Local0 = \_SB.WMAB (WBLT, WGET, Zero)
-                    If ((ObjectType (Local0) == 0x01))
-                    {
-                        If ((Local0 == 0x50) || (Local0 == 0x64))
-                        {
-                            Return (Local0)
-                        }
+                        Return (Local0)
                     }
                 }
                 Return (0x64)  // Default: 100%
@@ -329,46 +313,26 @@ DefinitionBlock ("", "SSDT", 2, "GRAM", "GramSMC", 0x00001000)
             // Returns: 0 on success
             Method (SBCL, 1, Serialized)
             {
-                If ((Arg0 == 0x50) || (Arg0 == 0x64))  // 80 or 100
+                If ((ECON == One) && ((Arg0 == 0x50) || (Arg0 == 0x64)))
                 {
-                    // Try WMBB first (for 2019+ models)
-                    If (CondRefOf (\_SB.WMBB))
-                    {
-                        Local0 = Buffer (0x20) {}
-                        Local0 [Zero] = (WBBB & 0xFF)
-                        Local0 [One] = ((WBBB >> 8) & 0xFF)
-                        Local0 [0x04] = Arg0
-                        \_SB.WMBB (Zero, One, Local0)
-                        Return (Zero)
-                    }
-                    // Fallback to WMAB
-                    If (CondRefOf (\_SB.WMAB))
-                    {
-                        \_SB.WMAB (WBLT, WSET, Arg0)
-                        Return (Zero)
-                    }
+                    \_SB.PCI0.LPCB.H_EC.ECWT (Arg0, RefOf (\_SB.PCI0.LPCB.H_EC.BMB1))
+                    Return (Zero)
                 }
                 Return (One)  // Error
             }
             
             // ============================================
             // USB Charging (charge devices when laptop off)
+            // Uses EC register USCC directly
             // ============================================
             
             // GUSC - Get USB Charge State
             // Returns: 0=off, 1=on
             Method (GUSC, 0, Serialized)
             {
-                If (CondRefOf (\_SB.WMBB))
+                If ((ECON == One))
                 {
-                    Local0 = Buffer (0x20) {}
-                    Local0 [Zero] = (WUSB & 0xFF)
-                    Local0 [One] = ((WUSB >> 8) & 0xFF)
-                    Local1 = \_SB.WMBB (Zero, One, Local0)
-                    If ((ObjectType (Local1) == 0x03))  // Buffer
-                    {
-                        Return (DerefOf (Local1 [0x10]) != Zero)
-                    }
+                    Return (\_SB.PCI0.LPCB.H_EC.ECRD (RefOf (\_SB.PCI0.LPCB.H_EC.USCC)) != Zero)
                 }
                 Return (Zero)  // Default: off
             }
@@ -378,13 +342,9 @@ DefinitionBlock ("", "SSDT", 2, "GRAM", "GramSMC", 0x00001000)
             // Returns: 0 on success
             Method (SUSC, 1, Serialized)
             {
-                If (CondRefOf (\_SB.WMBB))
+                If ((ECON == One))
                 {
-                    Local0 = Buffer (0x20) {}
-                    Local0 [Zero] = (WUSB & 0xFF)
-                    Local0 [One] = ((WUSB >> 8) & 0xFF)
-                    Local0 [0x04] = (Arg0 != Zero)
-                    \_SB.WMBB (Zero, One, Local0)
+                    \_SB.PCI0.LPCB.H_EC.ECWT ((Arg0 != Zero), RefOf (\_SB.PCI0.LPCB.H_EC.USCC))
                     Return (Zero)
                 }
                 Return (One)  // Error
@@ -392,19 +352,16 @@ DefinitionBlock ("", "SSDT", 2, "GRAM", "GramSMC", 0x00001000)
             
             // ============================================
             // Reader Mode (reduce blue light)
+            // Uses EC register RDMD directly
             // ============================================
             
             // GRDM - Get Reader Mode State
             // Returns: 0=off, 1=on
             Method (GRDM, 0, Serialized)
             {
-                If (CondRefOf (\_SB.WMAB))
+                If ((ECON == One))
                 {
-                    Local0 = \_SB.WMAB (WRDM, WGET, Zero)
-                    If ((ObjectType (Local0) == 0x01))
-                    {
-                        Return (Local0 != Zero)
-                    }
+                    Return (\_SB.PCI0.LPCB.H_EC.ECRD (RefOf (\_SB.PCI0.LPCB.H_EC.RDMD)) != Zero)
                 }
                 Return (Zero)  // Default: off
             }
@@ -414,9 +371,9 @@ DefinitionBlock ("", "SSDT", 2, "GRAM", "GramSMC", 0x00001000)
             // Returns: 0 on success
             Method (SRDM, 1, Serialized)
             {
-                If (CondRefOf (\_SB.WMAB))
+                If ((ECON == One))
                 {
-                    \_SB.WMAB (WRDM, WSET, (Arg0 != Zero))
+                    \_SB.PCI0.LPCB.H_EC.ECWT ((Arg0 != Zero), RefOf (\_SB.PCI0.LPCB.H_EC.RDMD))
                     Return (Zero)
                 }
                 Return (One)  // Error
@@ -424,19 +381,16 @@ DefinitionBlock ("", "SSDT", 2, "GRAM", "GramSMC", 0x00001000)
             
             // ============================================
             // Fn Lock (swap function key behavior)
+            // Uses EC register FNLK directly like DSDT N01G/N01H methods
             // ============================================
             
             // GFNL - Get Fn Lock State
             // Returns: 0=off (Fn needed for F1-F12), 1=on (F1-F12 direct)
             Method (GFNL, 0, Serialized)
             {
-                If (CondRefOf (\_SB.WMAB))
+                If ((ECON == One))
                 {
-                    Local0 = \_SB.WMAB (WFNL, WGET, Zero)
-                    If ((ObjectType (Local0) == 0x03))  // Buffer
-                    {
-                        Return (DerefOf (Local0 [Zero]) != Zero)
-                    }
+                    Return (\_SB.PCI0.LPCB.H_EC.ECRD (RefOf (\_SB.PCI0.LPCB.H_EC.FNLK)) != Zero)
                 }
                 Return (Zero)  // Default: off
             }
@@ -446,157 +400,26 @@ DefinitionBlock ("", "SSDT", 2, "GRAM", "GramSMC", 0x00001000)
             // Returns: 0 on success
             Method (SFNL, 1, Serialized)
             {
-                If (CondRefOf (\_SB.WMAB))
+                If ((ECON == One))
                 {
-                    \_SB.WMAB (WFNL, WSET, (Arg0 != Zero))
+                    \_SB.PCI0.LPCB.H_EC.ECWT ((Arg0 != Zero), RefOf (\_SB.PCI0.LPCB.H_EC.FNLK))
                     Return (Zero)
                 }
                 Return (One)  // Error
             }
             
             // ============================================
-            // Feature Support Detection
-            // ============================================
-            
-            // ============================================
-            // SmartOn (Instant Boot) - Fast wake from sleep
-            // ============================================
-            
-            // GSMN - Get SmartOn State
-            // Returns: 0=off, 1=on
-            Method (GSMN, 0, Serialized)
-            {
-                If (CondRefOf (\_SB.WMAB))
-                {
-                    Local0 = \_SB.WMAB (WSMN, WGET, Zero)
-                    If ((ObjectType (Local0) == 0x01))
-                    {
-                        Return (Local0 != Zero)
-                    }
-                }
-                Return (Zero)
-            }
-            
-            // SSMN - Set SmartOn State
-            // Arg0: 0=off, 1=on
-            Method (SSMN, 1, Serialized)
-            {
-                If (CondRefOf (\_SB.WMAB))
-                {
-                    \_SB.WMAB (WSMN, WSET, (Arg0 != Zero))
-                    Return (Zero)
-                }
-                Return (One)
-            }
-            
-            // ============================================
-            // Boost Mode (Performance boost)
-            // ============================================
-            
-            // GBST - Get Boost Mode State
-            // Returns: 0=off, 1=on
-            Method (GBST, 0, Serialized)
-            {
-                If (CondRefOf (\_SB.WMAB))
-                {
-                    Local0 = \_SB.WMAB (WBST, WGET, Zero)
-                    If ((ObjectType (Local0) == 0x01))
-                    {
-                        Return (Local0 != Zero)
-                    }
-                }
-                Return (Zero)
-            }
-            
-            // SBST - Set Boost Mode State  
-            // Arg0: 0=off, 1=on
-            Method (SBST, 1, Serialized)
-            {
-                If (CondRefOf (\_SB.WMAB))
-                {
-                    \_SB.WMAB (WBST, WSET, (Arg0 != Zero))
-                    Return (Zero)
-                }
-                Return (One)
-            }
-            
-            // ============================================
-            // Eco Mode (Power saving)
-            // ============================================
-            
-            // GECO - Get Eco Mode State
-            // Returns: 0=off, 1=on
-            Method (GECO, 0, Serialized)
-            {
-                If (CondRefOf (\_SB.WMAB))
-                {
-                    Local0 = \_SB.WMAB (WECO, WGET, Zero)
-                    If ((ObjectType (Local0) == 0x01))
-                    {
-                        Return (Local0 != Zero)
-                    }
-                }
-                Return (Zero)
-            }
-            
-            // SECO - Set Eco Mode State
-            // Arg0: 0=off, 1=on
-            Method (SECO, 1, Serialized)
-            {
-                If (CondRefOf (\_SB.WMAB))
-                {
-                    \_SB.WMAB (WECO, WSET, (Arg0 != Zero))
-                    Return (Zero)
-                }
-                Return (One)
-            }
-            
-            // ============================================
-            // USB Type-C Mode
-            // ============================================
-            
-            // GTPC - Get USB Type-C Mode
-            // Returns: mode value
-            Method (GTPC, 0, Serialized)
-            {
-                If (CondRefOf (\_SB.WMAB))
-                {
-                    Local0 = \_SB.WMAB (WTPC, WGET, Zero)
-                    If ((ObjectType (Local0) == 0x01))
-                    {
-                        Return (Local0)
-                    }
-                }
-                Return (Zero)
-            }
-            
-            // STPC - Set USB Type-C Mode
-            // Arg0: mode value
-            Method (STPC, 1, Serialized)
-            {
-                If (CondRefOf (\_SB.WMAB))
-                {
-                    \_SB.WMAB (WTPC, WSET, Arg0)
-                    Return (Zero)
-                }
-                Return (One)
-            }
-            
-            // ============================================
             // Webcam Toggle
+            // Uses EC register CAMA directly
             // ============================================
             
             // GWCM - Get Webcam State
             // Returns: 0=disabled, 1=enabled
             Method (GWCM, 0, Serialized)
             {
-                If (CondRefOf (\_SB.WMAB))
+                If ((ECON == One))
                 {
-                    Local0 = \_SB.WMAB (WWCM, WGET, Zero)
-                    If ((ObjectType (Local0) == 0x01))
-                    {
-                        Return (Local0 != Zero)
-                    }
+                    Return (\_SB.PCI0.LPCB.H_EC.ECRD (RefOf (\_SB.PCI0.LPCB.H_EC.CAMA)) != Zero)
                 }
                 Return (One)  // Default: enabled
             }
@@ -605,9 +428,9 @@ DefinitionBlock ("", "SSDT", 2, "GRAM", "GramSMC", 0x00001000)
             // Arg0: 0=disabled, 1=enabled
             Method (SWCM, 1, Serialized)
             {
-                If (CondRefOf (\_SB.WMAB))
+                If ((ECON == One))
                 {
-                    \_SB.WMAB (WWCM, WSET, (Arg0 != Zero))
+                    \_SB.PCI0.LPCB.H_EC.ECWT ((Arg0 != Zero), RefOf (\_SB.PCI0.LPCB.H_EC.CAMA))
                     Return (Zero)
                 }
                 Return (One)
@@ -615,39 +438,47 @@ DefinitionBlock ("", "SSDT", 2, "GRAM", "GramSMC", 0x00001000)
             
             // ============================================
             // Feature Support Detection
+            // Based on actual DSDT EC registers available
             // ============================================
             
             // GCAP - Get Capabilities
-            // Returns bitmask of supported features:
-            //   Bit 0: Fan Mode
-            //   Bit 1: Battery Care Limit
-            //   Bit 2: USB Charging
-            //   Bit 3: Reader Mode
-            //   Bit 4: Fn Lock
-            //   Bit 5: SmartOn (Instant Boot)
-            //   Bit 6: Boost Mode
-            //   Bit 7: Eco Mode
-            //   Bit 8: USB Type-C
-            //   Bit 9: Webcam
+            // Returns bitmask of supported features (based on EC registers in DSDT):
+            //   Bit 0: Fan Mode (DFAN)
+            //   Bit 1: Battery Care Limit (BMB1)
+            //   Bit 2: USB Charging (USCC)
+            //   Bit 3: Reader Mode (RDMD)
+            //   Bit 4: Fn Lock (FNLK)
+            //   Bit 9: Webcam (CAMA)
             Method (GCAP, 0, Serialized)
             {
                 Local0 = Zero
-                If (CondRefOf (\_SB.WMAB))
+                If ((ECON == One))
                 {
-                    Local0 |= 0x01   // Fan Mode
-                    Local0 |= 0x02   // Battery Care
-                    Local0 |= 0x08   // Reader Mode
-                    Local0 |= 0x10   // Fn Lock
-                    Local0 |= 0x20   // SmartOn
-                    Local0 |= 0x40   // Boost Mode
-                    Local0 |= 0x80   // Eco Mode
-                    Local0 |= 0x100  // USB Type-C
-                    Local0 |= 0x200  // Webcam
-                }
-                If (CondRefOf (\_SB.WMBB))
-                {
-                    Local0 |= 0x02   // Battery Care (WMBB variant)
-                    Local0 |= 0x04   // USB Charging
+                    // Check for EC registers available in DSDT
+                    If (CondRefOf (\_SB.PCI0.LPCB.H_EC.DFAN))
+                    {
+                        Local0 |= 0x01   // Fan Mode
+                    }
+                    If (CondRefOf (\_SB.PCI0.LPCB.H_EC.BMB1))
+                    {
+                        Local0 |= 0x02   // Battery Care
+                    }
+                    If (CondRefOf (\_SB.PCI0.LPCB.H_EC.USCC))
+                    {
+                        Local0 |= 0x04   // USB Charging
+                    }
+                    If (CondRefOf (\_SB.PCI0.LPCB.H_EC.RDMD))
+                    {
+                        Local0 |= 0x08   // Reader Mode
+                    }
+                    If (CondRefOf (\_SB.PCI0.LPCB.H_EC.FNLK))
+                    {
+                        Local0 |= 0x10   // Fn Lock
+                    }
+                    If (CondRefOf (\_SB.PCI0.LPCB.H_EC.CAMA))
+                    {
+                        Local0 |= 0x200  // Webcam
+                    }
                 }
                 Return (Local0)
             }

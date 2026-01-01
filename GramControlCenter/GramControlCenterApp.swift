@@ -91,19 +91,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         
         menu.addItem(NSMenuItem.separator())
         
-        // Toggle Features
+        // Toggle Features (only supported by this DSDT)
         addToggleItem(menu, title: "USB Charging", state: gramSMC.usbCharging, 
                      capability: 0x04, action: #selector(toggleUSBCharging))
         addToggleItem(menu, title: "Reader Mode", state: gramSMC.readerMode, 
                      capability: 0x08, action: #selector(toggleReaderMode))
         addToggleItem(menu, title: "Fn Lock", state: gramSMC.fnLock, 
                      capability: 0x10, action: #selector(toggleFnLock))
-        addToggleItem(menu, title: "Instant Boot", state: gramSMC.smartOn, 
-                     capability: 0x20, action: #selector(toggleSmartOn))
-        addToggleItem(menu, title: "Boost Mode", state: gramSMC.boostMode, 
-                     capability: 0x40, action: #selector(toggleBoostMode))
-        addToggleItem(menu, title: "Eco Mode", state: gramSMC.ecoMode, 
-                     capability: 0x80, action: #selector(toggleEcoMode))
         addToggleItem(menu, title: "Webcam", state: gramSMC.webcam, 
                      capability: 0x200, action: #selector(toggleWebcam))
         
@@ -153,21 +147,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         updateMenu()
     }
     
-    @objc func toggleSmartOn() {
-        gramSMC.setSmartOn(!gramSMC.smartOn)
-        updateMenu()
-    }
-    
-    @objc func toggleBoostMode() {
-        gramSMC.setBoostMode(!gramSMC.boostMode)
-        updateMenu()
-    }
-    
-    @objc func toggleEcoMode() {
-        gramSMC.setEcoMode(!gramSMC.ecoMode)
-        updateMenu()
-    }
-    
     @objc func toggleWebcam() {
         gramSMC.setWebcam(!gramSMC.webcam)
         updateMenu()
@@ -176,7 +155,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     @objc func showAbout() {
         let alert = NSAlert()
         alert.messageText = "GramControlCenter"
-        alert.informativeText = "LG Gram Control Center for macOS\n\nVersion 1.0\n\nBased on LG Control Center\nPowered by GramSMC"
+        alert.informativeText = "LG Gram Control Center for macOS\n\nVersion 1.0\n\nFeatures: Fan Mode, Battery Care, USB Charging,\nReader Mode, Fn Lock, Webcam Toggle\n\nPowered by GramSMC"
         alert.alertStyle = .informational
         alert.addButton(withTitle: "OK")
         alert.runModal()
@@ -192,11 +171,7 @@ class GramSMCController {
     var usbCharging: Bool = false
     var readerMode: Bool = false
     var fnLock: Bool = false
-    var smartOn: Bool = false
-    var boostMode: Bool = false
-    var ecoMode: Bool = false
     var webcam: Bool = true
-    var usbTypeC: UInt32 = 0
     
     private var service: io_service_t = 0
     
@@ -229,11 +204,7 @@ class GramSMCController {
         usbCharging = getBoolProperty("USBCharging")
         readerMode = getBoolProperty("ReaderMode")
         fnLock = getBoolProperty("FnLock")
-        smartOn = getBoolProperty("SmartOn")
-        boostMode = getBoolProperty("BoostMode")
-        ecoMode = getBoolProperty("EcoMode")
         webcam = getBoolProperty("Webcam")
-        usbTypeC = getProperty("USBTypeC") ?? 0
     }
     
     func getProperty(_ name: String) -> UInt32? {
@@ -286,21 +257,6 @@ class GramSMCController {
     func setFnLock(_ enabled: Bool) {
         fnLock = enabled
         print("Fn lock: \(enabled)")
-    }
-    
-    func setSmartOn(_ enabled: Bool) {
-        smartOn = enabled
-        print("SmartOn: \(enabled)")
-    }
-    
-    func setBoostMode(_ enabled: Bool) {
-        boostMode = enabled
-        print("Boost mode: \(enabled)")
-    }
-    
-    func setEcoMode(_ enabled: Bool) {
-        ecoMode = enabled
-        print("Eco mode: \(enabled)")
     }
     
     func setWebcam(_ enabled: Bool) {

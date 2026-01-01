@@ -47,13 +47,12 @@
 #define WM_FN_LOCK                 0x407   // 0=off, 1=on
 #define WM_KEY_LIGHT               0x400   // Keyboard backlight
 
-// Additional method IDs (reverse engineered from LG Control Center DLLs)
-#define WM_SMART_ON                0x114   // Instant Boot
-#define WM_BOOST_MODE              0xBD    // Performance boost
-#define WM_ECO_MODE                0xEF    // Power saving
-#define WM_USB_TYPEC               0x40A   // USB Type-C mode
-#define WM_USB_TYPEC_BATTERY       0xED    // USB Type-C battery level
-#define WM_WEBCAM                  0x80    // Webcam toggle
+// Additional method IDs (only for reference - not all models support these)
+// These were reverse-engineered but this DSDT uses direct EC access instead
+// #define WM_SMART_ON                0x114   // Instant Boot (not in this DSDT)
+// #define WM_BOOST_MODE              0xBD    // Performance boost (not in this DSDT)
+// #define WM_ECO_MODE                0xEF    // Power saving (not in this DSDT)
+// #define WM_USB_TYPEC               0x40A   // USB Type-C mode (not in this DSDT)
 
 // WMI operation constants
 #define WM_GET                     1
@@ -70,18 +69,14 @@ enum GramFanMode {
     kFanModePerformance = 2
 };
 
-// Feature capability bitmask
+// Feature capability bitmask (based on actual DSDT EC registers)
 enum GramCapabilities {
-    kCapFanMode = 0x01,
-    kCapBatteryCare = 0x02,
-    kCapUSBCharging = 0x04,
-    kCapReaderMode = 0x08,
-    kCapFnLock = 0x10,
-    kCapSmartOn = 0x20,
-    kCapBoostMode = 0x40,
-    kCapEcoMode = 0x80,
-    kCapUSBTypeC = 0x100,
-    kCapWebcam = 0x200
+    kCapFanMode = 0x01,      // DFAN register
+    kCapBatteryCare = 0x02,  // BMB1 register
+    kCapUSBCharging = 0x04,  // USCC register
+    kCapReaderMode = 0x08,   // RDMD register
+    kCapFnLock = 0x10,       // FNLK register
+    kCapWebcam = 0x200       // CAMA register
 };
 
 class GramSMC : public IOService {
@@ -122,11 +117,7 @@ private:
         kDaemonUSBCharging = 7,
         kDaemonReaderMode = 8,
         kDaemonFnLock = 9,
-        kDaemonSmartOn = 10,
-        kDaemonBoostMode = 11,
-        kDaemonEcoMode = 12,
-        kDaemonUSBTypeC = 13,
-        kDaemonWebcam = 14,
+        kDaemonWebcam = 10,
     };
 
     static constexpr uint32_t SensorUpdateTimeoutMS {1000};
@@ -218,36 +209,16 @@ private:
     // Get supported features bitmask
     uint32_t getCapabilities();
     
-    // SmartOn (Instant Boot) - fast wake from sleep
-    bool getSmartOn();
-    void setSmartOn(bool enabled);
-    
-    // Boost Mode - performance boost
-    bool getBoostMode();
-    void setBoostMode(bool enabled);
-    
-    // Eco Mode - power saving
-    bool getEcoMode();
-    void setEcoMode(bool enabled);
-    
-    // USB Type-C mode
-    uint32_t getUSBTypeC();
-    void setUSBTypeC(uint32_t mode);
-    
     // Webcam toggle
     bool getWebcam();
     void setWebcam(bool enabled);
     
-    // Current state cache
+    // Current state cache (only features supported by this DSDT)
     uint32_t currentFanMode {kFanModeOptimal};
     uint32_t currentBatteryCareLimit {100};
     bool currentUSBCharging {false};
     bool currentReaderMode {false};
     bool currentFnLock {false};
-    bool currentSmartOn {false};
-    bool currentBoostMode {false};
-    bool currentEcoMode {false};
-    uint32_t currentUSBTypeC {0};
     bool currentWebcam {true};
     uint32_t capabilities {0};
 
