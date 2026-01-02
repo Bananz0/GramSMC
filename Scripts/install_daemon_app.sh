@@ -32,8 +32,8 @@ echo -e "${BLUE}[1/4] Stopping existing GramSMCDaemon...${NC}"
 
 if pgrep -x "GramSMCDaemon" > /dev/null; then
     echo "Stopping GramSMCDaemon..."
-    sudo launchctl bootout gui/$(id -u)/com.gramsmc.GramSMCDaemon 2>/dev/null || true
-    sudo launchctl unload /Library/LaunchAgents/com.gramsmc.GramSMCDaemon.plist 2>/dev/null || true
+    sudo launchctl bootout gui/$(id -u)/com.bananz0.GramSMCDaemon 2>/dev/null || true
+    sudo launchctl unload /Library/LaunchAgents/com.bananz0.GramSMCDaemon.plist 2>/dev/null || true
     sudo killall -9 GramSMCDaemon 2>/dev/null || true
     sleep 2
     echo -e "${GREEN}✓ Daemon stopped${NC}"
@@ -43,7 +43,7 @@ fi
 
 # Remove old daemon files
 sudo rm -f /usr/local/bin/GramSMCDaemon 2>/dev/null || true
-sudo rm -f /Library/LaunchAgents/com.gramsmc.GramSMCDaemon.plist 2>/dev/null || true
+sudo rm -f /Library/LaunchAgents/com.bananz0.GramSMCDaemon.plist 2>/dev/null || true
 
 # Step 2: Stop and uninstall existing app
 echo -e "\n${BLUE}[2/4] Stopping existing GramControlCenter...${NC}"
@@ -71,8 +71,8 @@ if [ ! -f "$BUILD_DIR/GramSMCDaemon" ]; then
     exit 1
 fi
 
-if [ ! -f "$BUILD_DIR/com.gramsmc.GramSMCDaemon.plist" ]; then
-    echo -e "${RED}Error: com.gramsmc.GramSMCDaemon.plist not found in $BUILD_DIR${NC}"
+if [ ! -f "$BUILD_DIR/com.bananz0.GramSMCDaemon.plist" ]; then
+    echo -e "${RED}Error: com.bananz0.GramSMCDaemon.plist not found in $BUILD_DIR${NC}"
     exit 1
 fi
 
@@ -83,14 +83,14 @@ sudo chmod 755 /usr/local/bin/GramSMCDaemon
 sudo chown root:wheel /usr/local/bin/GramSMCDaemon
 sudo xattr -d com.apple.quarantine /usr/local/bin/GramSMCDaemon 2>/dev/null || true
 
-sudo cp "$BUILD_DIR/com.gramsmc.GramSMCDaemon.plist" /Library/LaunchAgents/
-sudo chmod 644 /Library/LaunchAgents/com.gramsmc.GramSMCDaemon.plist
-sudo chown root:wheel /Library/LaunchAgents/com.gramsmc.GramSMCDaemon.plist
-sudo xattr -d com.apple.quarantine /Library/LaunchAgents/com.gramsmc.GramSMCDaemon.plist 2>/dev/null || true
+sudo cp "$BUILD_DIR/com.bananz0.GramSMCDaemon.plist" /Library/LaunchAgents/
+sudo chmod 644 /Library/LaunchAgents/com.bananz0.GramSMCDaemon.plist
+sudo chown root:wheel /Library/LaunchAgents/com.bananz0.GramSMCDaemon.plist
+sudo xattr -d com.apple.quarantine /Library/LaunchAgents/com.bananz0.GramSMCDaemon.plist 2>/dev/null || true
 
 # Load daemon
-sudo launchctl load /Library/LaunchAgents/com.gramsmc.GramSMCDaemon.plist 2>/dev/null || \
-    sudo launchctl bootstrap gui/$(id -u) /Library/LaunchAgents/com.gramsmc.GramSMCDaemon.plist
+sudo launchctl load /Library/LaunchAgents/com.bananz0.GramSMCDaemon.plist 2>/dev/null || \
+    sudo launchctl bootstrap gui/$(id -u) /Library/LaunchAgents/com.bananz0.GramSMCDaemon.plist
 
 sleep 2
 
@@ -117,7 +117,7 @@ echo -e "${GREEN}✓ App installed to /Applications${NC}"
 # Summary
 echo -e "\n${GREEN}=== Installation Complete ===${NC}"
 echo -e "${GREEN}✓ Daemon: /usr/local/bin/GramSMCDaemon${NC}"
-echo -e "${GREEN}✓ LaunchAgent: /Library/LaunchAgents/com.gramsmc.GramSMCDaemon.plist${NC}"
+echo -e "${GREEN}✓ LaunchAgent: /Library/LaunchAgents/com.bananz0.GramSMCDaemon.plist${NC}"
 echo -e "${GREEN}✓ App: /Applications/GramControlCenter.app${NC}"
 
 echo -e "\n${BLUE}=== Manual Steps Required ===${NC}"

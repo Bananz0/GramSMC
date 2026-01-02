@@ -59,17 +59,17 @@ Based on analysis of:
 
 ## EC Register Map (EC6662)
 
-Based on EC dump analysis from LG Control Center:
+Based on EC dump analysis from LG Control Center (verified Jan 2026 from 21 dumps):
 
 ### Feature Control Registers
 
 | Offset | Name | Size | Description | Values |
 |--------|------|------|-------------|--------|
-| 0x73 | FNLK | 8-bit | Fn Lock | 0x04=off (Fn needed), 0x00=on (F1-F12 direct) |
-| 0xBC | BATLIM | 8-bit | Battery Care Limit | 0x50=80%, 0x64=100% |
-| 0xBE | USCC | 8-bit | USB Charging (off/on) | 0x00=off, 0x01=on |
-| 0xC8 | TSR1 | 8-bit | Touch Screen / Temp1 | 0x59=on, 0x5A=off (bit 0) |
-| 0xCF | SILENT | 8-bit | Silent Mode | 0x00=off, 0x11=on |
+| 0x73 | FNLK | bit 2 | Fn Lock | 0x00=OFF (Fn needed), 0x04=ON (F1-F12 direct) |
+| 0xBC | BCSP | 8-bit | Battery Care Limit | 0x50=80%, 0x64=100% |
+| 0xBE | USCC | bit 0 | USB Charging (off/on) | 0x00=off, 0x01=on |
+| 0xC8 | TSR1 | 8-bit | CPU Temperature | Dynamic value |
+| 0xCF | DFAN | 8-bit | Silent Mode | 0x00=off, 0x11=on |
 
 ### Temperature & Fan Registers
 

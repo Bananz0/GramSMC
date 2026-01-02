@@ -292,6 +292,23 @@ void GramSMC::setPropertiesGated(OSObject *props) {
     SYSLOG("gram", "setProperties: Webcam set to %u",
            value->unsigned32BitValue());
   }
+
+  // KeyboardBacklight (0=Off, 1=Low, 2=High)
+  value = OSDynamicCast(OSNumber, dict->getObject("KeyboardBacklight"));
+  if (value != nullptr && hasKeyboardBacklight) {
+    uint32_t level = value->unsigned32BitValue();
+    if (level <= 2) {
+      // Map 0-2 levels to EC values at 0x72:
+      // 0 = Off  (0x80: KBBR=0, WSLP=0, KBBM=0, KBBS=1)
+      // 1 = Low  (0xA2: KBBR=2, WSLP=0, KBBM=1, KBBS=1)
+      // 2 = High (0xA4: KBBR=4, WSLP=0, KBBM=1, KBBS=1)
+      uint32_t ecValue = (level == 0) ? 0x80 : ((level == 1) ? 0xA2 : 0xA4);
+      setKeyboardBacklight(ecValue);
+      setProperty("KeyboardBacklight", level, 32);
+      SYSLOG("gram", "setProperties: KeyboardBacklight level %u (EC: 0x%02X)",
+             level, ecValue);
+    }
+  }
 }
 
 IOReturn GramSMC::setProperties(OSObject *props) {

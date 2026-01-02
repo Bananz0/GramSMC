@@ -200,7 +200,7 @@ int main(int argc, const char *argv[]) {
     struct kev_vendor_code vendorCode = {0};
 
     // set vendor name string
-    strncpy(vendorCode.vendor_string, "com.gramsmc",
+    strncpy(vendorCode.vendor_string, "com.bananz0",
             KEV_VENDOR_CODE_MAX_STR_LEN);
 
     // get vendor code
@@ -249,6 +249,16 @@ int main(int argc, const char *argv[]) {
       message = (struct GramSMCMessage *)&kernEventMsg->event_data[0];
 
       // printf("type:%d x:%d y:%d\n", message->type, message->x, message->y);
+
+      // Broadcast event to App
+      [[NSDistributedNotificationCenter defaultCenter]
+          postNotificationName:@"com.bananz0.GramSMC.Notification"
+                        object:nil
+                      userInfo:@{
+                        @"type" : @(message->type),
+                        @"x" : @(message->x),
+                        @"y" : @(message->y)
+                      }];
 
       switch (message->type) {
       case kDaemonKeyboardBacklight:
