@@ -12,6 +12,7 @@
 			buildConfigurationList = 314E65732F08183100A79975 /* Build configuration list for PBXAggregateTarget "GramSMC All" */;
 			buildPhases = (
 				314E657A2F08193000A79975 /* ShellScript */,
+				314E657B2F08194000A79975 /* ShellScript */,
 			);
 			dependencies = (
 				314E65792F08191300A79975 /* PBXTargetDependency */,
@@ -548,6 +549,23 @@
 			shellPath = /bin/sh;
 			shellScript = "#!/bin/bash\nset -euo pipefail\n\n# Colors (optional)\nRED='\\033[0;31m'\nGREEN='\\033[0;32m'\nBLUE='\\033[0;34m'\nNC='\\033[0m' # No Color\n\n# Source and output paths using Xcode env vars\n# Adjust SSDT_SRC if your DSL lives elsewhere\nSSDT_SRC=\"${SRCROOT}/GramSMC/SSDT-GramSMC.dsl\"\n\n# Built products output (what Xcode expects)\nBUILT_OUT_DIR=\"${BUILT_PRODUCTS_DIR}\"\nSSDT_AML_BUILT=\"${BUILT_OUT_DIR}/SSDT-GramSMC.aml\"\n\n# Repo-local collection directory (so you have a neat folder with artifacts)\nCOLLECT_OUT_DIR=\"${SRCROOT}/Build/${CONFIGURATION}\"\nSSDT_AML_COLLECT=\"${COLLECT_OUT_DIR}/SSDT-GramSMC.aml\"\n\necho -e \"${BLUE}Building SSDT-GramSMC...${NC}\"\n\nif [ ! -f \"${SSDT_SRC}\" ]; then\n  echo -e \"${RED}Error: SSDT source not found: ${SSDT_SRC}${NC}\"\n  exit 1\nfi\n\n# Check iasl availability\nif ! command -v iasl >/dev/null 2>&1; then\n  echo -e \"${RED}Error: iasl compiler not found. Install via:${NC}\"\n  echo -e \"${RED}  brew install acpica${NC}\"\n  exit 1\nfi\n\n# Compile SSDT in place (iasl outputs AML in the same directory)\nSSDT_DIR=\"$(dirname \"${SSDT_SRC}\")\"\npushd \"${SSDT_DIR}\" >/dev/null\niasl -ve -tc \"${SSDT_SRC}\" || {\n  echo -e \"${RED}Error: Failed to compile SSDT${NC}\"\n  exit 1\n}\npopd >/dev/null\n\n# Ensure output directories exist\nmkdir -p \"${BUILT_OUT_DIR}\"\nmkdir -p \"${COLLECT_OUT_DIR}\"\n\n# Copy AML to built products and collection directory\ncp \"${SSDT_DIR}/SSDT-GramSMC.aml\" \"${SSDT_AML_BUILT}\"\ncp \"${SSDT_DIR}/SSDT-GramSMC.aml\" \"${SSDT_AML_COLLECT}\"\n\n# Also copy DSL for reference into both locations (best-effort)\ncp \"${SSDT_SRC}\" \"${BUILT_OUT_DIR}/\" || true\ncp \"${SSDT_SRC}\" \"${COLLECT_OUT_DIR}/\" || true\n\n# Stamp file for Xcode dependency analysis (declare as Output File)\ntouch \"${BUILT_PRODUCTS_DIR}/.compile_ssdt_stamp\"\n\necho -e \"${GREEN}✓ SSDT compiled successfully:${NC}\"\necho -e \"${GREEN}  - ${SSDT_AML_BUILT}${NC}\"\necho -e \"${GREEN}  - ${SSDT_AML_COLLECT}${NC}\"\n";
 		};
+		314E657B2F08194000A79975 /* ShellScript */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "#!/bin/bash\nset -euo pipefail\n\n# Colors\nRED='\\033[0;31m'\nGREEN='\\033[0;32m'\nBLUE='\\033[0;34m'\nYELLOW='\\033[1;33m'\nNC='\\033[0m'\n\nBUILD_DIR=\"${SRCROOT}/build/${CONFIGURATION}\"\nKEXT_SRC=\"${BUILT_PRODUCTS_DIR}/GramSMC.kext\"\nAPP_SRC=\"${BUILT_PRODUCTS_DIR}/GramControlCenter.app\"\nDAEMON_SRC=\"${BUILT_PRODUCTS_DIR}/GramSMCDaemon\"\nPLIST_SRC=\"${SRCROOT}/GramSMCDaemon/com.gramsmc.GramSMCDaemon.plist\"\nINSTALL_SCRIPT_SRC=\"${SRCROOT}/Scripts/install_daemon_app.sh\"\n\necho -e \"${BLUE}[BUILD] Collecting products to ${BUILD_DIR}...${NC}\"\n\n# Create build directory\nmkdir -p \"${BUILD_DIR}\"\n\n# Copy kext\nif [ -d \"${KEXT_SRC}\" ]; then\n  rm -rf \"${BUILD_DIR}/GramSMC.kext\"\n  cp -R \"${KEXT_SRC}\" \"${BUILD_DIR}/\"\n  echo -e \"${GREEN}✓ Copied GramSMC.kext${NC}\"\nelse\n  echo -e \"${YELLOW}⚠ GramSMC.kext not found${NC}\"\nfi\n\n# Copy app\nif [ -d \"${APP_SRC}\" ]; then\n  rm -rf \"${BUILD_DIR}/GramControlCenter.app\"\n  cp -R \"${APP_SRC}\" \"${BUILD_DIR}/\"\n  echo -e \"${GREEN}✓ Copied GramControlCenter.app${NC}\"\nelse\n  echo -e \"${YELLOW}⚠ GramControlCenter.app not found${NC}\"\nfi\n\n# Copy daemon\nif [ -f \"${DAEMON_SRC}\" ]; then\n  cp \"${DAEMON_SRC}\" \"${BUILD_DIR}/\"\n  echo -e \"${GREEN}✓ Copied GramSMCDaemon${NC}\"\nelse\n  echo -e \"${YELLOW}⚠ GramSMCDaemon not found${NC}\"\nfi\n\n# Copy daemon plist\nif [ -f \"${PLIST_SRC}\" ]; then\n  cp \"${PLIST_SRC}\" \"${BUILD_DIR}/\"\n  echo -e \"${GREEN}✓ Copied daemon plist${NC}\"\nfi\n\n# Copy install script\nif [ -f \"${INSTALL_SCRIPT_SRC}\" ]; then\n  cp \"${INSTALL_SCRIPT_SRC}\" \"${BUILD_DIR}/install.sh\"\n  chmod +x \"${BUILD_DIR}/install.sh\"\n  echo -e \"${GREEN}✓ Copied install script${NC}\"\nfi\n\n# SSDT already compiled in previous phase\nif [ -f \"${BUILD_DIR}/SSDT-GramSMC.aml\" ]; then\n  echo -e \"${GREEN}✓ SSDT-GramSMC.aml ready${NC}\"\nfi\n\necho -e \"${GREEN}\\n✓ Build complete: ${BUILD_DIR}${NC}\"\necho -e \"${BLUE}Contents:${NC}\"\nls -lh \"${BUILD_DIR}\" | tail -n +2\n\necho -e \"${YELLOW}\\nTo install daemon and app:${NC}\"\necho -e \"  cd ${BUILD_DIR} && ./install.sh\"\n";
+		};
 		4C8C666424460F3C00D694EB /* Archive */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
@@ -626,10 +644,8 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1.5.0;
 				DEVELOPMENT_TEAM = QVWYYQ6F86;
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
-				MODULE_VERSION = 1.5.0;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 			};
 			name = Debug;
@@ -638,10 +654,8 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1.5.0;
 				DEVELOPMENT_TEAM = QVWYYQ6F86;
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
-				MODULE_VERSION = 1.5.0;
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 			};
@@ -675,7 +689,6 @@
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MACOSX_DEPLOYMENT_TARGET = 26.2;
 				MARKETING_VERSION = 1.5.0;
-				MODULE_VERSION = 1.5.0;
 				PRODUCT_BUNDLE_IDENTIFIER = bananz0.GramControlCenter;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -718,7 +731,6 @@
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MACOSX_DEPLOYMENT_TARGET = 26.2;
 				MARKETING_VERSION = 1.5.0;
-				MODULE_VERSION = 1.5.0;
 				PRODUCT_BUNDLE_IDENTIFIER = bananz0.GramControlCenter;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -879,12 +891,11 @@
 				INFOPLIST_KEY_CFBundleDisplayName = GramSMC;
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
 				MARKETING_VERSION = 1.5.0;
-				MODULE_NAME = com.bananz0.GramSMC;
+				MODULE_NAME = com.gramsmc.GramSMC;
 				MODULE_START = "$(PRODUCT_NAME)_kern_start";
 				MODULE_STOP = "$(PRODUCT_NAME)_kern_stop";
-				MODULE_VERSION = 1.5.0;
 				OTHER_CPLUSPLUSFLAGS = "-Wno-inconsistent-missing-override";
-				PRODUCT_BUNDLE_IDENTIFIER = com.bananz0.GramSMC;
+				PRODUCT_BUNDLE_IDENTIFIER = com.gramsmc.GramSMC;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				RUN_CLANG_STATIC_ANALYZER = YES;
 				WRAPPER_EXTENSION = kext;
@@ -911,12 +922,11 @@
 				INFOPLIST_KEY_CFBundleDisplayName = GramSMC;
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
 				MARKETING_VERSION = 1.5.0;
-				MODULE_NAME = com.bananz0.GramSMC;
+				MODULE_NAME = com.gramsmc.GramSMC;
 				MODULE_START = "$(PRODUCT_NAME)_kern_start";
 				MODULE_STOP = "$(PRODUCT_NAME)_kern_stop";
-				MODULE_VERSION = 1.5.0;
 				OTHER_CPLUSPLUSFLAGS = "-Wno-inconsistent-missing-override";
-				PRODUCT_BUNDLE_IDENTIFIER = com.bananz0.GramSMC;
+				PRODUCT_BUNDLE_IDENTIFIER = com.gramsmc.GramSMC;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				WRAPPER_EXTENSION = kext;
 			};
@@ -926,11 +936,9 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_IDENTITY = "-";
-				CURRENT_PROJECT_VERSION = 1.5.0;
 				DEAD_CODE_STRIPPING = YES;
-				INFOPLIST_FILE = GramSMCDaemon/com.bananz0.GramSMCDaemon.plist;
+				INFOPLIST_FILE = GramSMCDaemon/com.gramsmc.GramSMCDaemon.plist;
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
-				MODULE_VERSION = 1.5.0;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 			};
 			name = Debug;
@@ -939,11 +947,9 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_IDENTITY = "-";
-				CURRENT_PROJECT_VERSION = 1.5.0;
 				DEAD_CODE_STRIPPING = YES;
-				INFOPLIST_FILE = GramSMCDaemon/com.bananz0.GramSMCDaemon.plist;
+				INFOPLIST_FILE = GramSMCDaemon/com.gramsmc.GramSMCDaemon.plist;
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
-				MODULE_VERSION = 1.5.0;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 			};
 			name = Release;
