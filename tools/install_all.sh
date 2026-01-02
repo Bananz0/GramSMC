@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# GramSMC v2.0.0 All-in-One Installer
+# GramSMC v1.5.0 All-in-One Installer
 # Automates building and installation of SSDT, Kext, Daemon, and Control Center App.
 
 set -e
@@ -20,7 +20,7 @@ PRINT_BLUE='\033[0;34m'
 PRINT_RED='\033[0;31m'
 PRINT_NC='\033[0m' # No Color
 
-echo -e "${PRINT_BLUE}=== GramSMC v2.0.0 All-in-One Installer ===${PRINT_NC}"
+echo -e "${PRINT_BLUE}=== GramSMC v1.5.0 All-in-One Installer ===${PRINT_NC}"
 
 # Check for required tools
 command -v xcodebuild >/dev/null 2>&1 || { echo -e "${PRINT_RED}Error: xcodebuild is required but not installed.${PRINT_NC}" >&2; exit 1; }
@@ -83,13 +83,14 @@ if [[ $REPLY =~ ^[Yy]$ ]]; then
     sudo chmod 755 "$DAEMON_DEST/GramSMCDaemon"
     
     # Plist
-    sudo cp "$PROJECT_ROOT/GramSMCDaemon/com.gramsmc.GramSMCDaemon.plist" "$DAEMON_PLIST/"
-    sudo chown root:wheel "$DAEMON_PLIST/com.gramsmc.GramSMCDaemon.plist"
-    sudo chmod 644 "$DAEMON_PLIST/com.gramsmc.GramSMCDaemon.plist"
+    sudo cp "$PROJECT_ROOT/GramSMCDaemon/com.bananz0.GramSMCDaemon.plist" "$DAEMON_PLIST/"
+    sudo chown root:wheel "$DAEMON_PLIST/com.bananz0.GramSMCDaemon.plist"
+    sudo chmod 644 "$DAEMON_PLIST/com.bananz0.GramSMCDaemon.plist"
     
     # Reload Daemon
     sudo launchctl unload "$DAEMON_PLIST/com.gramsmc.GramSMCDaemon.plist" 2>/dev/null || true
-    sudo launchctl load "$DAEMON_PLIST/com.gramsmc.GramSMCDaemon.plist"
+    sudo launchctl unload "$DAEMON_PLIST/com.bananz0.GramSMCDaemon.plist" 2>/dev/null || true
+    sudo launchctl load "$DAEMON_PLIST/com.bananz0.GramSMCDaemon.plist"
     
     # App
     echo "Installing GramControlCenter to Applications..."

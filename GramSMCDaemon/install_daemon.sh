@@ -15,6 +15,7 @@ sudo rm /Library/LaunchAgents/com.hieplpvip.AsusSMCDaemon.plist 2>/dev/null
 
 # remove old GramSMCDaemon
 sudo launchctl unload /Library/LaunchAgents/com.gramsmc.GramSMCDaemon.plist 2>/dev/null
+sudo rm /Library/LaunchAgents/com.gramsmc.GramSMCDaemon.plist 2>/dev/null
 sudo pkill -f GramSMCDaemon
 
 # install new GramSMCDaemon
@@ -25,9 +26,9 @@ sudo chmod 755 /usr/local/bin/GramSMCDaemon
 sudo chown root:wheel /usr/local/bin/GramSMCDaemon
 sudo xattr -d com.apple.quarantine /usr/local/bin/GramSMCDaemon 2>/dev/null
 
-sudo cp $DIR/com.gramsmc.GramSMCDaemon.plist /Library/LaunchAgents
-sudo chmod 644 /Library/LaunchAgents/com.gramsmc.GramSMCDaemon.plist
-sudo chown root:wheel /Library/LaunchAgents/com.gramsmc.GramSMCDaemon.plist
-sudo xattr -d com.apple.quarantine /Library/LaunchAgents/com.gramsmc.GramSMCDaemon.plist 2>/dev/null
+sudo cp $DIR/com.bananz0.GramSMCDaemon.plist /Library/LaunchAgents
+sudo chmod 644 /Library/LaunchAgents/com.bananz0.GramSMCDaemon.plist
+sudo chown root:wheel /Library/LaunchAgents/com.bananz0.GramSMCDaemon.plist
+sudo xattr -d com.apple.quarantine /Library/LaunchAgents/com.bananz0.GramSMCDaemon.plist 2>/dev/null
 
-sudo launchctl load /Library/LaunchAgents/com.gramsmc.GramSMCDaemon.plist
+sudo launchctl load /Library/LaunchAgents/com.bananz0.GramSMCDaemon.plist

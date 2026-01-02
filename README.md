@@ -4,6 +4,8 @@ A VirtualSMC plugin that provides native support for ALS, keyboard backlight, an
 
 *Based on [AsusSMC](https://github.com/hieplpvip/AsusSMC) by Le Bao Hiep*
 
+Project Home: [Bananz0/GramSMC](https://github.com/Bananz0/GramSMC)
+
 ## Features
 - Full Fn keys support (brightness, keyboard backlight, sleep, etc.)
 - Native ALS (Ambient Light Sensor) support
@@ -74,3 +76,4 @@ GramSMC interfaces with the following LG Gram EC registers:
 
 ## License
 BSD 3-Clause License
+Copyright © 2026 Glen Muthoka Mutinda

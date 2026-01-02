@@ -75,7 +75,7 @@ fi
 echo -e "\n${BLUE}[4/4] Organizing build artifacts...${NC}"
 
 # Copy daemon plist
-cp "$PROJECT_DIR/GramSMCDaemon/com.gramsmc.GramSMCDaemon.plist" "$RELEASE_DIR/" 2>/dev/null || true
+cp "$PROJECT_DIR/GramSMCDaemon/com.bananz0.GramSMCDaemon.plist" "$RELEASE_DIR/" 2>/dev/null || true
 
 # Copy install scripts
 cp "$PROJECT_DIR/Scripts/install_all.sh" "$RELEASE_DIR/" 2>/dev/null || true

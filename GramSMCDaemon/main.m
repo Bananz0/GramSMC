@@ -59,7 +59,7 @@ struct GramSMCMessage {
 const int kMaxDisplays = 16;
 u_int32_t vendorID = 0;
 
-bool _loadBezelServices() {
+bool _loadBezelServices(void) {
   // Load BezelServices framework
   void *handle = dlopen("/System/Library/PrivateFrameworks/"
                         "BezelServices.framework/Versions/A/BezelServices",
@@ -74,7 +74,7 @@ bool _loadBezelServices() {
   }
 }
 
-bool _loadOSDFramework() {
+bool _loadOSDFramework(void) {
   return [[NSBundle
       bundleWithPath:@"/System/Library/PrivateFrameworks/OSD.framework"] load];
 }
@@ -146,7 +146,7 @@ void showKBoardBLightStatus(int level, int max) {
   }
 }
 
-void goToSleep() {
+void goToSleep(void) {
   if (_BSDoGraphicWithMeterAndTimeout !=
       NULL) // El Capitan and probably older systems
     MDSendAppleEventToSystemProcess(kAESleep);
@@ -165,7 +165,7 @@ void goToSleep() {
 
 BOOL airplaneModeEnabled = NO, lastWifiState;
 int lastBluetoothState;
-void toggleAirplaneMode() {
+void toggleAirplaneMode(void) {
   airplaneModeEnabled = !airplaneModeEnabled;
 
   CWInterface *currentInterface = [CWWiFiClient.sharedWiFiClient interface];
@@ -184,7 +184,7 @@ void toggleAirplaneMode() {
 
 int main(int argc, const char *argv[]) {
   @autoreleasepool {
-    printf("GramSMCDaemon v2.0.0 started...\n");
+    printf("GramSMCDaemon started");
 
     if (!_loadBezelServices()) {
       _loadOSDFramework();

@@ -13,7 +13,7 @@ Date: January 1, 2026
 - **PID:** Running (check with `ps aux | grep GramControlCenter`)
 - **Type:** Menu bar application (no dock icon thanks to LSUIElement)
 - **Auto-start:** Yes, via LaunchAgent
-- **Config:** `~/Library/LaunchAgents/com.gramsmc.GramControlCenter.plist`
+- **Config:** `~/Library/LaunchAgents/com.bananz0.GramControlCenter.plist`
 
 ### **2. GramSMCDaemon** ⏸️ NOT INSTALLED YET
 - **Status:** Needs sudo to install
@@ -67,10 +67,10 @@ All options are shown but greyed out because **GramSMC.kext is not currently loa
 ```bash
 cd /Users/glenm/GramSMC/build/Release
 sudo cp GramSMCDaemon /usr/local/bin/
-sudo cp com.gramsmc.GramSMCDaemon.plist /Library/LaunchDaemons/
+sudo cp com.bananz0.GramSMCDaemon.plist /Library/LaunchDaemons/
 sudo chmod 755 /usr/local/bin/GramSMCDaemon
-sudo chmod 644 /Library/LaunchDaemons/com.gramsmc.GramSMCDaemon.plist
-sudo launchctl load /Library/LaunchDaemons/com.gramsmc.GramSMCDaemon.plist
+sudo chmod 644 /Library/LaunchDaemons/com.bananz0.GramSMCDaemon.plist
+sudo launchctl load /Library/LaunchDaemons/com.bananz0.GramSMCDaemon.plist
 ```
 
 ### **Step 2: Load GramSMC.kext via OpenCore** (REQUIRED for full functionality)
@@ -130,7 +130,7 @@ ps aux | grep GramSMCDaemon | grep -v grep
 ### **Check if kext is loaded:**
 ```bash
 kextstat | grep GramSMC
-# Should show: com.gramsmc.GramSMC (1.4.1)
+# Should show: com.bananz0.GramSMC (1.4.1)
 ```
 
 ### **Check IORegistry for device:**
@@ -156,8 +156,8 @@ ioreg -l -w 0 | grep -i gram
 - `/usr/local/bin/GramSMCDaemon` (once installed)
 
 ### **Launch Agents/Daemons:**
-- `~/Library/LaunchAgents/com.gramsmc.GramControlCenter.plist`
-- `/Library/LaunchDaemons/com.gramsmc.GramSMCDaemon.plist` (once installed)
+- `~/Library/LaunchAgents/com.bananz0.GramControlCenter.plist`
+- `/Library/LaunchDaemons/com.bananz0.GramSMCDaemon.plist` (once installed)
 
 ### **Kext:**
 - `/Users/glenm/GramSMC/build/Release/GramSMC.kext` (build location)
@@ -203,8 +203,8 @@ ps aux | grep GramControlCenter | grep -v grep
 launchctl list | grep gramsmc
 
 # Restart it
-launchctl unload ~/Library/LaunchAgents/com.gramsmc.GramControlCenter.plist
-launchctl load ~/Library/LaunchAgents/com.gramsmc.GramControlCenter.plist
+launchctl unload ~/Library/LaunchAgents/com.bananz0.GramControlCenter.plist
+launchctl load ~/Library/LaunchAgents/com.bananz0.GramControlCenter.plist
 ```
 
 ### **Options still greyed out after loading kext?**

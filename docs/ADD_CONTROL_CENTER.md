@@ -18,8 +18,8 @@ The GramControlCenter folder was added via git pull but is not yet registered in
 3. **Configure the target:**
    - **Product Name:** `GramControlCenter`
    - **Team:** None (or your team)
-   - **Organization Identifier:** `com.gramsmc`
-   - **Bundle Identifier:** `com.gramsmc.GramControlCenter`
+   - **Organization Identifier:** `com.bananz0`
+   - **Bundle Identifier:** `com.bananz0.GramControlCenter`
    - **Interface:** SwiftUI
    - **Language:** Swift
    - **Use Core Data:** Unchecked
@@ -50,7 +50,7 @@ The GramControlCenter folder was added via git pull but is not yet registered in
    Select the **GramControlCenter** target, then:
    
    **General Tab:**
-   - **Bundle Identifier:** `com.gramsmc.GramControlCenter`
+   - **Bundle Identifier:** `com.bananz0.GramControlCenter`
    - **Version:** 1.0
    - **Build:** 1
    - **Minimum Deployments:** macOS 11.0

@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.gramsmc.GramControlCenter</string>
+    <string>com.bananz0.GramControlCenter</string>
     <key>ProgramArguments</key>
     <array>
         <string>/Applications/GramControlCenter.app/Contents/MacOS/GramControlCenter</string>

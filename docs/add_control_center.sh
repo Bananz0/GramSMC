@@ -19,8 +19,8 @@ To add GramControlCenter to Xcode:
    - Select "App" under "macOS"
    - Product Name: GramControlCenter
    - Team: None
-   - Organization Identifier: com.gramsmc
-   - Bundle Identifier: com.gramsmc.GramControlCenter
+   - Organization Identifier: com.bananz0
+   - Bundle Identifier: com.bananz0.GramControlCenter
    - Interface: SwiftUI
    - Language: Swift
    - Click "Finish"
@@ -36,7 +36,7 @@ To add GramControlCenter to Xcode:
 4. Update Build Settings:
    - Select GramControlCenter target
    - Build Settings -> Deployment -> macOS Deployment Target: 11.0
-   - Info -> Bundle Identifier: com.gramsmc.GramControlCenter
+   - Info -> Bundle Identifier: com.bananz0.GramControlCenter
    - Info -> Custom iOS Target Properties -> "Application is agent (UIElement)" = YES
 
 5. Build and Run!

@@ -353,7 +353,7 @@ struct SettingsView: View {
                         HStack {
                             Text("App Version")
                             Spacer()
-                            Text(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "Unknown")
+                            Text(verbatim: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "Unknown")
                                 .foregroundColor(.secondary)
                         }
                         
@@ -371,7 +371,7 @@ struct SettingsView: View {
                         HStack {
                             Text("Daemon Version")
                             Spacer()
-                            Text("2.0.0")
+                            Text(verbatim: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.5.0")
                                 .foregroundColor(.secondary)
                         }
                     }
@@ -382,12 +382,12 @@ struct SettingsView: View {
             // Footer
             Divider()
             HStack {
-                Text("GramSMC v2.0.0")
+                Text("GramSMC v\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.5.0")")
                     .font(.caption)
                     .foregroundColor(.secondary)
                 Spacer()
                 Button(action: {
-                    if let url = URL(string: "https://github.com/") {
+                    if let url = URL(string: "https://github.com/Bananz0/GramSMC") {
                         NSWorkspace.shared.open(url)
                     }
                 }) {

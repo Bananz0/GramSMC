@@ -171,7 +171,7 @@ ioreg -l | grep -i GRAM
 ### Check if kext is loaded
 ```bash
 kextstat | grep -i gram
-# Should show com.gramsmc.GramSMC
+# Should show com.bananz0.GramSMC
 ```
 
 ### Check kext version in IORegistry
@@ -197,7 +197,7 @@ launchctl list | grep gramsmc
 **Solution:**
 - Kext must be loaded in kernel: `kextstat | grep GramSMC`
 - Check IORegistry for GramSMC service
-- Restart daemon: `sudo launchctl unload /Library/LaunchAgents/com.gramsmc.GramSMCDaemon.plist && sudo launchctl load /Library/LaunchAgents/com.gramsmc.GramSMCDaemon.plist`
+- Restart daemon: `sudo launchctl unload /Library/LaunchAgents/com.bananz0.GramSMCDaemon.plist && sudo launchctl load /Library/LaunchAgents/com.bananz0.GramSMCDaemon.plist`
 
 ### Issue: "SSDT not loading"
 **Solution:**

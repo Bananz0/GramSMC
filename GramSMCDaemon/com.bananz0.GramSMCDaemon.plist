@@ -7,7 +7,7 @@
 	<key>KeepAlive</key>
 	<true/>
 	<key>Label</key>
-	<string>com.gramsmc.GramSMCDaemon</string>
+	<string>com.bananz0.GramSMCDaemon</string>
 	<key>ProgramArguments</key>
 	<array>
 		<string>/usr/local/bin/GramSMCDaemon</string>

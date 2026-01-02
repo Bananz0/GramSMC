@@ -1,0 +1,6 @@
+#ifndef GRAM_SMC_VERSION_H
+#define GRAM_SMC_VERSION_H
+
+#define GRAM_SMC_VERSION "1.5.0"
+
+#endif // GRAM_SMC_VERSION_H

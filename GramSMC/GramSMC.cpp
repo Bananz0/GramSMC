@@ -6,7 +6,7 @@
 //  Modified for LG Gram laptops
 //
 //  Copyright © 2018-2020 Le Bao Hiep. All rights reserved.
-//  Copyright © 2024-2025 GramSMC contributors.
+//  Copyright © 2026 Glen Muthoka Mutinda.
 //
 
 #include "GramSMC.hpp"
@@ -24,7 +24,7 @@ OSDefineMetaClassAndStructors(GramSMC, IOService)
 
   _notificationServices = OSSet::withCapacity(1);
 
-  kev.setVendorID("com.gramsmc");
+  kev.setVendorID("com.bananz0");
   kev.setEventCode(GramSMCEventCode);
 
   atomic_init(&currentLux, 0);
@@ -159,7 +159,8 @@ bool GramSMC::start(IOService *provider) {
 
   // Expose CPU Temperature
   uint32_t temp = 0;
-  if (gramDevice && gramDevice->evaluateInteger("GTMP", &temp) == kIOReturnSuccess) {
+  if (gramDevice &&
+      gramDevice->evaluateInteger("GTMP", &temp) == kIOReturnSuccess) {
     setProperty("CPUTemp", temp, 32);
   }
 
@@ -241,7 +242,8 @@ void GramSMC::setPropertiesGated(OSObject *props) {
   OSNumber *value;
 
   // Fan Mode
-  if ((value = OSDynamicCast(OSNumber, dict->getObject("FanMode")))) {
+  value = OSDynamicCast(OSNumber, dict->getObject("FanMode"));
+  if (value != nullptr) {
     uint32_t mode = value->unsigned32BitValue();
     if (mode <= kFanModePerformance) {
       setFanMode(mode);
@@ -250,7 +252,8 @@ void GramSMC::setPropertiesGated(OSObject *props) {
   }
 
   // Battery Care Limit
-  if ((value = OSDynamicCast(OSNumber, dict->getObject("BatteryCareLimit")))) {
+  value = OSDynamicCast(OSNumber, dict->getObject("BatteryCareLimit"));
+  if (value != nullptr) {
     uint32_t limit = value->unsigned32BitValue();
     if (limit == 80 || limit == 100) {
       setBatteryCareLimit(limit);
@@ -259,28 +262,32 @@ void GramSMC::setPropertiesGated(OSObject *props) {
   }
 
   // USB Charging
-  if ((value = OSDynamicCast(OSNumber, dict->getObject("USBCharging")))) {
+  value = OSDynamicCast(OSNumber, dict->getObject("USBCharging"));
+  if (value != nullptr) {
     setUSBCharging(value->unsigned32BitValue() != 0);
     SYSLOG("gram", "setProperties: USBCharging set to %u",
            value->unsigned32BitValue());
   }
 
   // Reader Mode
-  if ((value = OSDynamicCast(OSNumber, dict->getObject("ReaderMode")))) {
+  value = OSDynamicCast(OSNumber, dict->getObject("ReaderMode"));
+  if (value != nullptr) {
     setReaderMode(value->unsigned32BitValue() != 0);
     SYSLOG("gram", "setProperties: ReaderMode set to %u",
            value->unsigned32BitValue());
   }
 
   // Fn Lock
-  if ((value = OSDynamicCast(OSNumber, dict->getObject("FnLock")))) {
+  value = OSDynamicCast(OSNumber, dict->getObject("FnLock"));
+  if (value != nullptr) {
     setFnLock(value->unsigned32BitValue() != 0);
     SYSLOG("gram", "setProperties: FnLock set to %u",
            value->unsigned32BitValue());
   }
 
   // Webcam
-  if ((value = OSDynamicCast(OSNumber, dict->getObject("Webcam")))) {
+  value = OSDynamicCast(OSNumber, dict->getObject("Webcam"));
+  if (value != nullptr) {
     setWebcam(value->unsigned32BitValue() != 0);
     SYSLOG("gram", "setProperties: Webcam set to %u",
            value->unsigned32BitValue());
@@ -757,9 +764,11 @@ void GramSMC::handleMessage(int code) {
   DBGLOG("gram", "Received key %d(0x%x)", code, code);
 }
 
-IOReturn GramSMC::gramNotificationHandler(void *refCon, UInt32 messageType, IOService *provider, void *messageArgument) {
+IOReturn GramSMC::gramNotificationHandler(void *refCon, UInt32 messageType,
+                                          IOService *provider,
+                                          void *messageArgument) {
   GramSMC *self = static_cast<GramSMC *>(refCon);
-  
+
   if (messageType == kIOACPIMessageDeviceNotification) {
     // LG Gram uses direct ACPI messaging via SSDT patches
     // Get the event code from GEVT method
@@ -771,6 +780,6 @@ IOReturn GramSMC::gramNotificationHandler(void *refCon, UInt32 messageType, IOSe
       self->handleMessage(*((uint32_t *)messageArgument));
     }
   }
-  
+
   return kIOReturnSuccess;
 }

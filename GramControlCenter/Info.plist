@@ -9,7 +9,7 @@
     <key>CFBundleIconFile</key>
     <string>AppIcon</string>
     <key>CFBundleIdentifier</key>
-    <string>com.gramsmc.GramControlCenter</string>
+    <string>com.bananz0.GramControlCenter</string>
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>CFBundleName</key>
@@ -17,15 +17,15 @@
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
-    <string>2.0.0</string>
+    <string>$(MARKETING_VERSION)</string>
     <key>CFBundleVersion</key>
-    <string>2.0.0</string>
+    <string>$(MARKETING_VERSION)</string>
     <key>LSMinimumSystemVersion</key>
     <string>11.0</string>
     <key>LSUIElement</key>
     <true/>
     <key>NSHumanReadableCopyright</key>
-    <string>Copyright © 2024-2025 GramSMC contributors. Based on LG Control Center.</string>
+    <string>Copyright © 2026 Glen Muthoka Mutinda. Based on LG Control Center.</string>
     <key>NSPrincipalClass</key>
     <string>NSApplication</string>
     <key>com.apple.security.temporary-exception.iokit-user-client-class</key>

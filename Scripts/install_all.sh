@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# GramSMC v2.0.0 Installation Script
+# GramSMC v1.5.0 Installation Script
 # Kills existing daemon/app, installs kext, daemon, app, and SSDT
 
 set -e
@@ -19,7 +19,7 @@ DAEMON_DEST="/usr/local/bin"
 DAEMON_PLIST="/Library/LaunchAgents"
 APP_DEST="/Applications"
 
-echo -e "${BLUE}=== GramSMC v2.0.0 Installer ===${NC}"
+echo -e "${BLUE}=== GramSMC v1.5.0 Installer ===${NC}"
 
 # Step 1: Kill existing daemon and app FIRST
 echo -e "\n${BLUE}[1/5] Stopping existing GramSMC services...${NC}"

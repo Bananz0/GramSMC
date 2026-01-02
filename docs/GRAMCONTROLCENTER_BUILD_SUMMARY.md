@@ -14,7 +14,7 @@ Build Time: ~3 minutes
 - **Size:** 392 KB
 - **Architecture:** Universal Binary (x86_64 + ARM64)
 - **Version:** 1.0
-- **Bundle ID:** `bananz0.GramControlCenter` *(Note: This should be `com.gramsmc.GramControlCenter`)*
+- **Bundle ID:** `bananz0.GramControlCenter` *(Note: This should be `com.bananz0.GramControlCenter`)*
 
 ### **Build Artifacts:**
 ```
@@ -126,7 +126,7 @@ ioreg -l -w 0 | grep -i gram
 ## 🐛 **Known Issues**
 
 ### **1. Bundle Identifier Mismatch**
-- **Expected:** `com.gramsmc.GramControlCenter`
+- **Expected:** `com.bananz0.GramControlCenter`
 - **Actual:** `bananz0.GramControlCenter`
 - **Impact:** Minor - just a naming inconsistency
 - **Fix:** Update Xcode project settings
@@ -178,7 +178,7 @@ To fully test GramControlCenter:
    log stream --predicate 'process == "GramControlCenter"' --level info
    
    # Kext logs
-   log stream --predicate 'subsystem == "com.gramsmc.GramSMC"' --level debug
+   log stream --predicate 'subsystem == "com.bananz0.GramSMC"' --level debug
    ```
 
 ---
@@ -194,7 +194,7 @@ cd /Users/glenm/GramSMC/build/Release
 zip -r GramSMC-1.4.1-RELEASE-Full.zip \
   GramSMC.kext \
   GramSMCDaemon \
-  com.gramsmc.GramSMCDaemon.plist \
+  com.bananz0.GramSMCDaemon.plist \
   install_daemon.sh \
   GramControlCenter.app
 
@@ -206,7 +206,7 @@ echo "Release package created: GramSMC-1.4.1-RELEASE-Full.zip"
 ## 🎨 **Future Improvements**
 
 ### **High Priority:**
-1. Fix bundle identifier to `com.gramsmc.GramControlCenter`
+1. Fix bundle identifier to `com.bananz0.GramControlCenter`
 2. Fix LSUIElement to hide from dock properly
 3. Add app icon (currently using default)
 4. Test all features with kext loaded

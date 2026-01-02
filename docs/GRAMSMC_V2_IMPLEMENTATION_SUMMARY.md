@@ -1,14 +1,14 @@
-# GramSMC v2.0.0 Implementation Summary
+# GramSMC v1.5.0 Implementation Summary
 
 ## Overview
 
-All components have been updated to v2.0.0 with synchronized properties and handlers.
+All components have been updated to v1.5.0 with synchronized properties and handlers.
 
 ## Changes Made
 
 ### 1. SSDT-GramSMC.dsl ✅
 - **Location:** `ACPI-Gram/Patched/SSDT-GramSMC.dsl`
-- **OEM Revision:** Already set to `0x00020000` (v2.0.0)
+- **OEM Revision:** Already set to `0x00020000` (v1.5.0)
 - **ECON Checks:** Not present (uses direct EC access via `ECRX`/`ECWX`)
 - **Brightness Keys:** Uses PS2K notifications (`0x0405`/`0x0406`) - SSDT-FNKey approach
 - **Compiled:** `Compiled/SSDT-GramSMC.aml`
@@ -30,7 +30,7 @@ All components have been updated to v2.0.0 with synchronized properties and hand
 
 ### 3. GramSMC Kext ✅
 - **Location:** `GramSMC/GramSMC.cpp`, `GramSMC/GramSMC.hpp`
-- **Version:** Updated to 2.0.0 in `project.pbxproj`
+- **Version:** Updated to 1.5.0 in `project.pbxproj`
 - **New Features:**
   - Added `KeyboardBacklight` handler in `setPropertiesGated()` (0=Off, 1=Low, 2=High)
   - Added `SilentMode` alias for `FanMode` (backwards compatibility)
@@ -43,14 +43,14 @@ All components have been updated to v2.0.0 with synchronized properties and hand
 
 ### 4. GramSMCDaemon ✅
 - **Location:** `GramSMCDaemon/main.m`
-- **Version:** Already shows `v2.0.0` in startup message
+- **Version:** Already shows `v1.5.0` in startup message
 - **Handlers:** All present (kDaemonFanMode=5 through kDaemonWebcam=10)
 - **Enum values synced with kext**
 - **Compiled:** `Compiled/GramSMCDaemon`
 
 ### 5. GramControlCenter App ✅
 - **Location:** `GramControlCenter/GramControlCenterApp.swift`
-- **Version:** Already set to 2.0.0 in `Info.plist`
+- **Version:** Already set to 1.5.0 in `Info.plist`
 - **Changes Made:**
   - Changed `SilentMode` toggle to `FanMode` picker (Optimal/Silent/Performance)
   - Added `fanModeString` computed property for display
@@ -60,7 +60,7 @@ All components have been updated to v2.0.0 with synchronized properties and hand
   - About section displays:
     - App Version (from Bundle)
     - Kext Version (from `GramSMC-Version` property)
-    - Daemon Version (static "2.0.0")
+    - Daemon Version (static "1.5.0")
 - **Compiled:** `Compiled/GramControlCenter.app`
 
 ## Property Synchronization
@@ -81,9 +81,9 @@ All components have been updated to v2.0.0 with synchronized properties and hand
 ## Build Artifacts
 
 All compiled artifacts are in the `Compiled/` folder:
-- `GramSMC.kext` - v2.0.0
-- `GramControlCenter.app` - v2.0.0
-- `GramSMCDaemon` - v2.0.0
+- `GramSMC.kext` - v1.5.0
+- `GramControlCenter.app` - v1.5.0
+- `GramSMCDaemon` - v1.5.0
 - `SSDT-GramSMC.aml` - OEM Rev 0x00020000
 
 ## Installation
