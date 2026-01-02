@@ -307,9 +307,9 @@ struct SettingsView: View {
                     }
                     
                     // Display Section
-                    SettingsSection(title: "Display", icon: "display") {
+                    SettingsSection(title: "Display", icon: "icon_display_n") {
                         HStack {
-                            Image(systemName: "moon.fill")
+                            Image("icon_display_Kelvin")
                                 .foregroundColor(.orange)
                             VStack(alignment: .leading) {
                                 Text("Night Light")
@@ -330,7 +330,7 @@ struct SettingsView: View {
                     
                     // Status Section
                     if controller.isConnected {
-                        SettingsSection(title: "Status", icon: "chart.bar") {
+                        SettingsSection(title: "Status", icon: "icon_info_normal") {
                             HStack {
                                 StatusCard(
                                     title: "CPU Temperature",
@@ -341,7 +341,7 @@ struct SettingsView: View {
                                 StatusCard(
                                     title: "Fan Speed",
                                     value: "\(controller.fanRPM) RPM",
-                                    icon: "fan",
+                                    icon: "icon_pan_n",
                                     color: controller.fanRPM > 3000 ? .orange : .blue
                                 )
                             }
@@ -349,11 +349,11 @@ struct SettingsView: View {
                     }
                     
                     // About Section
-                    SettingsSection(title: "About", icon: "info.circle") {
+                    SettingsSection(title: "About", icon: "icon_info_normal") {
                         HStack {
                             Text("App Version")
                             Spacer()
-                            Text(verbatim: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "Unknown")
+                            Text(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "Unknown")
                                 .foregroundColor(.secondary)
                         }
                         
@@ -371,7 +371,7 @@ struct SettingsView: View {
                         HStack {
                             Text("Daemon Version")
                             Spacer()
-                            Text(verbatim: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.5.0")
+                            Text("2.0.0")
                                 .foregroundColor(.secondary)
                         }
                     }
@@ -382,12 +382,12 @@ struct SettingsView: View {
             // Footer
             Divider()
             HStack {
-                Text("GramSMC v\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.5.0")")
+                Text("GramSMC v2.0.0")
                     .font(.caption)
                     .foregroundColor(.secondary)
                 Spacer()
                 Button(action: {
-                    if let url = URL(string: "https://github.com/Bananz0/GramSMC") {
+                    if let url = URL(string: "https://github.com/") {
                         NSWorkspace.shared.open(url)
                     }
                 }) {
