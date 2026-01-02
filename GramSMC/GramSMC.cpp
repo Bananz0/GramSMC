@@ -149,6 +149,26 @@ bool GramSMC::start(IOService *provider) {
     SYSLOG("gram", "Webcam: %s", currentWebcam ? "enabled" : "disabled");
   }
 
+  // Expose KeyboardBacklight level (0=Off, 1=Low, 2=High)
+  if (hasKeyboardBacklight) {
+    uint32_t kblRaw = getKeyboardBacklight();
+    uint32_t kblLevel = kblRaw == 0 ? 0 : (kblRaw <= 127 ? 1 : 2);
+    setProperty("KeyboardBacklight", kblLevel, 32);
+    SYSLOG("gram", "Keyboard backlight: %u", kblLevel);
+  }
+
+  // Expose CPU Temperature
+  uint32_t temp = 0;
+  if (gramDevice && gramDevice->evaluateInteger("GTMP", &temp) == kIOReturnSuccess) {
+    setProperty("CPUTemp", temp, 32);
+  }
+
+  // Expose Fan RPM
+  if (isTACHAvailable) {
+    refreshFan();
+    setProperty("FanRPM", (uint32_t)atomic_load(&currentFanSpeed), 32);
+  }
+
   registerService();
 
   return true;

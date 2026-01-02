@@ -3,20 +3,27 @@
 //  GramControlCenter
 //
 //  Created by Glen Muthoka on 01/01/2026.
-//  Copyright © 2026 Le Bao Hiep. All rights reserved.
+//  Copyright © 2026 GramSMC contributors. All rights reserved.
 //
 
 import SwiftUI
 
 struct ContentView: View {
     var body: some View {
-        VStack {
-            Image(systemName: "globe")
+        // Main app uses GramControlCenterApp.swift with menu bar
+        // This view is a placeholder for potential future windowed mode
+        VStack(spacing: 16) {
+            Image(systemName: "laptopcomputer")
                 .imageScale(.large)
+                .font(.system(size: 48))
                 .foregroundStyle(.tint)
-            Text("Hello, world!")
+            Text("LG Gram Control Center")
+                .font(.title2)
+            Text("Use the menu bar icon to access controls")
+                .font(.caption)
+                .foregroundColor(.secondary)
         }
-        .padding()
+        .padding(40)
     }
 }
 

@@ -133,6 +133,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         updateMenu()
     }
     
+    @objc func cycleFanMode() {
+        let newMode = (gramSMC.fanMode + 1) % 3
+        gramSMC.setFanMode(newMode)
+        updateMenu()
+    }
+    
     @objc func toggleBatteryCare() {
         let newLimit: UInt32 = gramSMC.batteryCareLimit == 80 ? 100 : 80
         gramSMC.setBatteryCareLimit(newLimit)
@@ -195,17 +201,30 @@ struct SettingsView: View {
                     
                     // System Section
                     SettingsSection(title: "System", icon: "gearshape") {
-                        // Silent Mode
-                        ToggleRow(
-                            title: "Silent Mode",
-                            subtitle: "Reduce fan noise for quiet operation",
-                            icon: "speaker.slash",
-                            isOn: Binding(
-                                get: { controller.silentMode },
-                                set: { controller.setSilentMode($0) }
-                            ),
-                            isEnabled: controller.isConnected
-                        )
+                        // Fan Mode (replaces simple Silent Mode toggle)
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack {
+                                Image(systemName: "fan")
+                                    .foregroundColor(.blue)
+                                Text("Fan Mode")
+                                    .fontWeight(.medium)
+                                Spacer()
+                            }
+                            Text("Control fan behavior: Optimal, Silent, or Performance")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            
+                            Picker("", selection: Binding(
+                                get: { Int(controller.fanMode) },
+                                set: { controller.setFanMode(UInt32($0)) }
+                            )) {
+                                Text("Optimal").tag(0)
+                                Text("Silent").tag(1)
+                                Text("Performance").tag(2)
+                            }
+                            .pickerStyle(.segmented)
+                            .disabled(!controller.isConnected)
+                        }
                         
                         Divider()
                         
@@ -328,6 +347,34 @@ struct SettingsView: View {
                             }
                         }
                     }
+                    
+                    // About Section
+                    SettingsSection(title: "About", icon: "info.circle") {
+                        HStack {
+                            Text("App Version")
+                            Spacer()
+                            Text(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "Unknown")
+                                .foregroundColor(.secondary)
+                        }
+                        
+                        Divider()
+                        
+                        HStack {
+                            Text("Kext Version")
+                            Spacer()
+                            Text(controller.kextVersion)
+                                .foregroundColor(.secondary)
+                        }
+                        
+                        Divider()
+                        
+                        HStack {
+                            Text("Daemon Version")
+                            Spacer()
+                            Text("2.0.0")
+                                .foregroundColor(.secondary)
+                        }
+                    }
                 }
                 .padding()
             }
@@ -335,13 +382,20 @@ struct SettingsView: View {
             // Footer
             Divider()
             HStack {
-                Text("GramSMC v2.0")
+                Text("GramSMC v2.0.0")
                     .font(.caption)
                     .foregroundColor(.secondary)
                 Spacer()
-                Text("Based on LG Control Center")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                Button(action: {
+                    if let url = URL(string: "https://github.com/") {
+                        NSWorkspace.shared.open(url)
+                    }
+                }) {
+                    Text("Based on LG Control Center")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                .buttonStyle(.plain)
             }
             .padding(.horizontal)
             .padding(.vertical, 8)
@@ -447,13 +501,24 @@ struct StatusCard: View {
 class GramSMCController: ObservableObject {
     @Published var capabilities: UInt32 = 0
     @Published var keyboardBacklight: Int = 0  // 0=Off, 1=Low, 2=High
-    @Published var silentMode: Bool = false
+    @Published var fanMode: UInt32 = 0          // 0=Optimal, 1=Silent, 2=Performance
     @Published var batteryCareLimit: Int = 100
     @Published var usbCharging: Bool = false
     @Published var fnLock: Bool = false
     @Published var cpuTemp: Int = 0
     @Published var fanRPM: Int = 0
     @Published var isConnected: Bool = false
+    @Published var kextVersion: String = "Unknown"
+    
+    // Computed property for fan mode string
+    var fanModeString: String {
+        switch fanMode {
+        case 0: return "Optimal"
+        case 1: return "Silent"
+        case 2: return "Performance"
+        default: return "Unknown"
+        }
+    }
     
     private var service: io_service_t = 0
     
@@ -499,12 +564,13 @@ class GramSMCController: ObservableObject {
         DispatchQueue.main.async { [self] in
             capabilities = getProperty("Capabilities") ?? 0
             keyboardBacklight = Int(getProperty("KeyboardBacklight") ?? 0)
-            silentMode = getBoolProperty("SilentMode")
+            fanMode = getProperty("FanMode") ?? 0
             batteryCareLimit = Int(getProperty("BatteryCareLimit") ?? 100)
             usbCharging = getBoolProperty("USBCharging")
             fnLock = getBoolProperty("FnLock")
             cpuTemp = Int(getProperty("CPUTemp") ?? 0)
             fanRPM = Int(getProperty("FanRPM") ?? 0)
+            kextVersion = getStringProperty("GramSMC-Version") ?? "Unknown"
             isConnected = true
         }
     }
@@ -529,6 +595,16 @@ class GramSMCController: ObservableObject {
         return false
     }
     
+    func getStringProperty(_ name: String) -> String? {
+        guard service != 0 else { return nil }
+        if let prop = IORegistryEntryCreateCFProperty(service, name as CFString, kCFAllocatorDefault, 0) {
+            if let str = prop.takeRetainedValue() as? String {
+                return str
+            }
+        }
+        return nil
+    }
+    
     // MARK: - Setters
     
     func setKeyboardBacklight(_ level: UInt32) {
@@ -539,8 +615,20 @@ class GramSMCController: ObservableObject {
     
     func setSilentMode(_ enabled: Bool) {
         guard service != 0 else { return }
-        silentMode = enabled
-        setProperty("SilentMode", value: enabled ? 1 : 0)
+        fanMode = enabled ? 1 : 0
+        setProperty("FanMode", value: fanMode)
+    }
+    
+    func setFanMode(_ mode: UInt32) {
+        guard service != 0 else { return }
+        fanMode = mode
+        setProperty("FanMode", value: mode)
+    }
+    
+    // Computed property for backwards compatibility
+    var silentMode: Bool {
+        get { fanMode == 1 }
+        set { setFanMode(newValue ? 1 : 0) }
     }
     
     func setBatteryCareLimit(_ limit: UInt32) {
