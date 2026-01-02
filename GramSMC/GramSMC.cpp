@@ -768,6 +768,28 @@ void GramSMC::handleMessage(int code) {
     dispatchCSMRReport(kHIDUsage_Csmr_Mute);
     break;
 
+  // Media buttons
+  case 0x40:
+  case 0x8A:
+    dispatchCSMRReport(kHIDUsage_Csmr_ScanPreviousTrack);
+    break;
+
+  case 0x41:
+  case 0x82:
+    dispatchCSMRReport(kHIDUsage_Csmr_ScanNextTrack);
+    break;
+
+  case 0x45:
+  case 0x5C:
+    dispatchCSMRReport(kHIDUsage_Csmr_PlayOrPause);
+    break;
+
+  case 0x33: // hardwired On
+  case 0x34: // hardwired Off
+  case 0x35: // Soft Event, Fn + F7
+    displayOff();
+    break;
+
   case 0x61: // Video Mirror
     dispatchTCReport(kHIDUsage_AV_TopCase_VideoMirror);
     break;
@@ -840,15 +862,17 @@ void GramSMC::toggleTouchpad() {
   // dispatchMessage(kKeyboardSetTouchStatus, &isTouchpadEnabled);
 }
 
-void GramSMC::dispatchCSMRReport(int code) {
-  // Simple dispatch loop
-  csmrreport.keys.insert(code);
-  postKeyboardInputReport(&csmrreport, sizeof(csmrreport));
-  csmrreport.keys.erase(code);
-  postKeyboardInputReport(&csmrreport, sizeof(csmrreport));
+void GramSMC::dispatchCSMRReport(int code, int loop) {
+  DBGLOG("gram", "Dispatched key %d(0x%x), loop %d time(s)", code, code, loop);
+  while (loop--) {
+    csmrreport.keys.insert(code);
+    postKeyboardInputReport(&csmrreport, sizeof(csmrreport));
+    csmrreport.keys.erase(code);
+    postKeyboardInputReport(&csmrreport, sizeof(csmrreport));
+  }
 }
 
-void GramSMC::dispatchTCReport(int code) {
+void GramSMC::dispatchTCReport(int code, int loop) {
   tcreport.keys.insert(code);
   postKeyboardInputReport(&tcreport, sizeof(tcreport));
   tcreport.keys.erase(code);
@@ -1032,10 +1056,10 @@ bool GramSMC::vsmcNotificationHandler(void *sensors, void *refCon,
 
       // We prefer to use our own timer (poller) initialized in start()
       // But AsusSMC re-initializes it here to be safe and sets callback to
-      // lambda Let's stick to our start() logic where poller is already set up
-      // to call ::message or similar? Actually, AsusSMC uses a lambda for the
-      // timer source which calls refresh methods. In our start(), we set up
-      // poller but didn't assign an action! So we SHOULD do it here.
+      // lambda Let's stick to our start() logic where poller is already set
+      // up to call ::message or similar? Actually, AsusSMC uses a lambda for
+      // the timer source which calls refresh methods. In our start(), we set
+      // up poller but didn't assign an action! So we SHOULD do it here.
 
       if (self->poller) {
         self->poller->cancelTimeout();
@@ -1048,13 +1072,14 @@ bool GramSMC::vsmcNotificationHandler(void *sensors, void *refCon,
           }
         };
 
-        // IOTimerEventSource doesn't easily support changing action after init
-        // without re-creating usually But we can check if we can just use the
-        // poller we have. Actually, let's just use what AsusSMC does: create a
-        // new one or assuming the one in start was just placeholder? In start()
-        // we did: poller = IOTimerEventSource::timerEventSource(this,
-        // [](OSObject *owner, IOTimerEventSource *sender){ ... }); Wait, in my
-        // start() I didn't see the lambda! checked start() in step 188:
+        // IOTimerEventSource doesn't easily support changing action after
+        // init without re-creating usually But we can check if we can just
+        // use the poller we have. Actually, let's just use what AsusSMC does:
+        // create a new one or assuming the one in start was just placeholder?
+        // In start() we did: poller =
+        // IOTimerEventSource::timerEventSource(this,
+        // [](OSObject *owner, IOTimerEventSource *sender){ ... }); Wait, in
+        // my start() I didn't see the lambda! checked start() in step 188:
         // command_gate = IOCommandGate::commandGate(this);
         // ... workloop->addEventSource(command_gate)
         // BUT poller is NOT initialized in start() visible lines!
@@ -1079,4 +1104,91 @@ bool GramSMC::vsmcNotificationHandler(void *sensors, void *refCon,
   }
 
   return false;
+}
+
+// Restored Backlight Logic
+void GramSMC::displayOff() {
+  if (isPanelBackLightOn) {
+    // Read Panel brigthness value to restore later with backlight toggle
+    readPanelBrightnessValue();
+
+    dispatchTCReport(kHIDUsage_AV_TopCase_BrightnessDown, 16);
+  } else {
+    dispatchTCReport(kHIDUsage_AV_TopCase_BrightnessUp, panelBrightnessLevel);
+  }
+
+  isPanelBackLightOn = !isPanelBackLightOn;
+}
+
+int GramSMC::checkBacklightEntry() {
+  if (IORegistryEntry *bkl = IORegistryEntry::fromPath(backlightEntry)) {
+    OSSafeReleaseNULL(bkl);
+    return 1;
+  } else {
+    DBGLOG("gram", "Failed to find backlight entry for %s", backlightEntry);
+    return 0;
+  }
+}
+
+int GramSMC::findBacklightEntry() {
+  // Check for previous found backlight entry
+  if (checkBacklightEntry()) {
+    return 1;
+  }
+
+  snprintf(backlightEntry, sizeof(backlightEntry),
+           "IOService:/AppleACPIPlatformExpert/PCI0@0/AppleACPIPCI/IGPU@2/"
+           "AppleIntelFramebuffer@0/display0/AppleBacklightDisplay");
+  if (checkBacklightEntry()) {
+    return 1;
+  }
+
+  snprintf(backlightEntry, sizeof(backlightEntry),
+           "IOService:/AppleACPIPlatformExpert/PCI0@0/AppleACPIPCI/GFX0@2/"
+           "AppleIntelFramebuffer@0/display0/AppleBacklightDisplay");
+  if (checkBacklightEntry()) {
+    return 1;
+  }
+
+  // Generic fallback search or additional paths could be added here similar
+  // to AsusSMC
+  return 0;
+}
+
+void GramSMC::readPanelBrightnessValue() {
+  if (!findBacklightEntry()) {
+    DBGLOG("gram", "GPU device not found");
+    return;
+  }
+
+  IORegistryEntry *displayDeviceEntry =
+      IORegistryEntry::fromPath(backlightEntry);
+
+  if (displayDeviceEntry) {
+    if (OSDictionary *ioDisplayParaDict = OSDynamicCast(
+            OSDictionary,
+            displayDeviceEntry->getProperty("IODisplayParameters"))) {
+      if (OSDictionary *brightnessDict = OSDynamicCast(
+              OSDictionary, ioDisplayParaDict->getObject("brightness"))) {
+        if (OSNumber *brightnessValue =
+                OSDynamicCast(OSNumber, brightnessDict->getObject("value"))) {
+          panelBrightnessLevel = brightnessValue->unsigned32BitValue() / 64;
+          DBGLOG("gram", "Panel brightness level: %d", panelBrightnessLevel);
+        }
+      }
+    }
+  }
+  OSSafeReleaseNULL(displayDeviceEntry);
+}
+
+EXPORT extern "C" kern_return_t ADDPR(kern_start)(kmod_info_t *, void *) {
+  PE_parse_boot_argn("liludelay", &ADDPR(debugPrintDelay),
+                     sizeof(ADDPR(debugPrintDelay)));
+  ADDPR(debugEnabled) =
+      checkKernelArgument("-vsmcdbg") || checkKernelArgument("-gramsmcdbg");
+  return KERN_SUCCESS;
+}
+
+EXPORT extern "C" kern_return_t ADDPR(kern_stop)(kmod_info_t *, void *) {
+  return KERN_SUCCESS;
 }

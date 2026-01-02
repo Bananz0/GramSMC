@@ -113,14 +113,20 @@ protected:
   void setWebcam(bool enabled);
 
   uint32_t getKeyboardBacklight();
+
   void setKeyboardBacklight(uint32_t level);
+
+  void readPanelBrightnessValue();
+  int findBacklightEntry();
+  int checkBacklightEntry();
+  void displayOff();
 
   void toggleTouchpad();
   void toggleAirplaneMode();
   void letSleep();
 
-  void dispatchTCReport(int code);
-  void dispatchCSMRReport(int code);
+  void dispatchTCReport(int code, int loop = 1);
+  void dispatchCSMRReport(int code, int loop = 1);
   IOReturn postKeyboardInputReport(const void *report, uint32_t reportSize);
 
 private:
@@ -150,6 +156,10 @@ private:
   bool currentReaderMode = false;
   bool currentFnLock = false;
   bool currentWebcam = true;
+
+  bool isPanelBackLightOn = true;
+  uint32_t panelBrightnessLevel = 0;
+  char backlightEntry[256];
 
   OSSet *_notificationServices;
   IONotifier *_publishNotify;
