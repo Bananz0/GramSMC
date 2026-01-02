@@ -17,6 +17,7 @@
 
 import SwiftUI
 import IOKit
+import Combine
 
 @main
 struct GramControlCenterApp: App {

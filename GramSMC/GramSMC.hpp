@@ -147,6 +147,9 @@ private:
 
   void handleMessage(int code);
 
+  // Notification handler for GRAM device
+  IOReturn gramNotificationHandler(void *refCon, UInt32 messageType, IOService *provider, void *messageArgument);
+
   // LG Gram device (GRAM0001 from SSDT)
   IOACPIPlatformDevice *gramDevice{nullptr};
   IOACPIPlatformDevice *alsDevice{nullptr};
