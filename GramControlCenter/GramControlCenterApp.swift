@@ -45,8 +45,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         
         if let button = statusItem.button {
-            button.image = NSImage(systemSymbolName: "laptopcomputer", accessibilityDescription: "LG Gram Control Center")
-            button.image?.isTemplate = true
+            // Try to use custom icon, fallback to SF Symbol
+            if let customIcon = NSImage(named: "titlebar_icon_control_center") {
+                button.image = customIcon
+                button.image?.isTemplate = true
+            } else {
+                button.image = NSImage(systemSymbolName: "laptopcomputer", accessibilityDescription: "LG Gram Control Center")
+                button.image?.isTemplate = true
+            }
         }
         
         // Initialize GramSMC controller
@@ -88,27 +94,44 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Open Settings Window
         let settingsItem = NSMenuItem(title: "Open Settings...", action: #selector(openSettings), keyEquivalent: ",")
         settingsItem.target = self
+        if let icon = NSImage(named: "icon_control_n") {
+            settingsItem.image = icon
+            settingsItem.image?.size = NSSize(width: 16, height: 16)
+        }
         menu.addItem(settingsItem)
         
         menu.addItem(NSMenuItem.separator())
         
         // Quick Toggles
         let kblLevels = ["Off", "Low", "High"]
+        let kblIconNames = ["icon_KBD_off", "icon_KBD_low", "icon_KBD_high"]
         let kblItem = NSMenuItem(title: "Keyboard: \(kblLevels[gramSMC.keyboardBacklight])", action: #selector(cycleKeyboardBacklight), keyEquivalent: "")
         kblItem.target = self
         kblItem.isEnabled = isConnected
+        if let icon = NSImage(named: kblIconNames[Int(gramSMC.keyboardBacklight) % 3]) {
+            kblItem.image = icon
+            kblItem.image?.size = NSSize(width: 16, height: 16)
+        }
         menu.addItem(kblItem)
         
         let silentItem = NSMenuItem(title: "Silent Mode", action: #selector(toggleSilentMode), keyEquivalent: "")
         silentItem.target = self
         silentItem.state = gramSMC.silentMode ? .on : .off
         silentItem.isEnabled = isConnected
+        if let icon = NSImage(named: "icon_pan_slient_n") {
+            silentItem.image = icon
+            silentItem.image?.size = NSSize(width: 16, height: 16)
+        }
         menu.addItem(silentItem)
         
         let batteryItem = NSMenuItem(title: "Battery Care (\(gramSMC.batteryCareLimit)%)", action: #selector(toggleBatteryCare), keyEquivalent: "")
         batteryItem.target = self
         batteryItem.state = gramSMC.batteryCareLimit == 80 ? .on : .off
         batteryItem.isEnabled = isConnected
+        if let icon = NSImage(named: "icon_battery_normal_n") {
+            batteryItem.image = icon
+            batteryItem.image?.size = NSSize(width: 16, height: 16)
+        }
         menu.addItem(batteryItem)
         
         menu.addItem(NSMenuItem.separator())
@@ -177,9 +200,15 @@ struct SettingsView: View {
         VStack(spacing: 0) {
             // Header
             HStack {
-                Image(systemName: "laptopcomputer")
-                    .font(.system(size: 28))
-                    .foregroundColor(.accentColor)
+                if let headerIcon = NSImage(named: "titlebar_icon_control_center") {
+                    Image(nsImage: headerIcon)
+                        .resizable()
+                        .frame(width: 28, height: 28)
+                } else {
+                    Image(systemName: "laptopcomputer")
+                        .font(.system(size: 28))
+                        .foregroundColor(.accentColor)
+                }
                 Text("LG Gram Control Center")
                     .font(.title2)
                     .fontWeight(.semibold)
@@ -200,12 +229,18 @@ struct SettingsView: View {
                 VStack(alignment: .leading, spacing: 20) {
                     
                     // System Section
-                    SettingsSection(title: "System", icon: "gearshape") {
+                    SettingsSection(title: "System", icon: "icon_control_n") {
                         // Fan Mode (replaces simple Silent Mode toggle)
                         VStack(alignment: .leading, spacing: 8) {
                             HStack {
-                                Image(systemName: "fan")
-                                    .foregroundColor(.blue)
+                                if let icon = NSImage(named: "icon_pan_n") {
+                                    Image(nsImage: icon)
+                                        .resizable()
+                                        .frame(width: 20, height: 20)
+                                } else {
+                                    Image(systemName: "fan")
+                                        .foregroundColor(.blue)
+                                }
                                 Text("Fan Mode")
                                     .fontWeight(.medium)
                                 Spacer()
@@ -231,8 +266,14 @@ struct SettingsView: View {
                         // Battery Care
                         VStack(alignment: .leading, spacing: 8) {
                             HStack {
-                                Image(systemName: "battery.75")
-                                    .foregroundColor(.green)
+                                if let icon = NSImage(named: "icon_battery_normal_n") {
+                                    Image(nsImage: icon)
+                                        .resizable()
+                                        .frame(width: 20, height: 20)
+                                } else {
+                                    Image(systemName: "battery.75")
+                                        .foregroundColor(.green)
+                                }
                                 Text("Battery Care Limit")
                                     .fontWeight(.medium)
                                 Spacer()
@@ -258,7 +299,7 @@ struct SettingsView: View {
                         ToggleRow(
                             title: "USB Charging (Always On)",
                             subtitle: "Charge devices via USB when laptop is off or sleeping",
-                            icon: "cable.connector",
+                            icon: "icon_usb_n",
                             isOn: Binding(
                                 get: { controller.usbCharging },
                                 set: { controller.setUSBCharging($0) }
@@ -268,12 +309,18 @@ struct SettingsView: View {
                     }
                     
                     // Input Section
-                    SettingsSection(title: "Input", icon: "keyboard") {
+                    SettingsSection(title: "Input", icon: "icon_KBD_high") {
                         // Keyboard Backlight
                         VStack(alignment: .leading, spacing: 8) {
                             HStack {
-                                Image(systemName: "light.max")
-                                    .foregroundColor(.yellow)
+                                if let icon = NSImage(named: "icon_KBD_high") {
+                                    Image(nsImage: icon)
+                                        .resizable()
+                                        .frame(width: 20, height: 20)
+                                } else {
+                                    Image(systemName: "light.max")
+                                        .foregroundColor(.yellow)
+                                }
                                 Text("Keyboard Backlight")
                                     .fontWeight(.medium)
                                 Spacer()
@@ -297,7 +344,7 @@ struct SettingsView: View {
                         ToggleRow(
                             title: "Fn Lock",
                             subtitle: "Use F1-F12 keys directly without holding Fn",
-                            icon: "fn",
+                            icon: "icon_hotkey_n",
                             isOn: Binding(
                                 get: { controller.fnLock },
                                 set: { controller.setFnLock($0) }
@@ -309,8 +356,14 @@ struct SettingsView: View {
                     // Display Section
                     SettingsSection(title: "Display", icon: "icon_display_n") {
                         HStack {
-                            Image("icon_display_Kelvin")
-                                .foregroundColor(.orange)
+                            if let icon = NSImage(named: "icon_display_Kelvin") {
+                                Image(nsImage: icon)
+                                    .resizable()
+                                    .frame(width: 20, height: 20)
+                            } else {
+                                Image(systemName: "moon.fill")
+                                    .foregroundColor(.orange)
+                            }
                             VStack(alignment: .leading) {
                                 Text("Night Light")
                                     .fontWeight(.medium)
@@ -429,8 +482,14 @@ struct SettingsSection<Content: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Image(systemName: icon)
-                    .foregroundColor(.accentColor)
+                if let customIcon = NSImage(named: icon) {
+                    Image(nsImage: customIcon)
+                        .resizable()
+                        .frame(width: 16, height: 16)
+                } else {
+                    Image(systemName: icon)
+                        .foregroundColor(.accentColor)
+                }
                 Text(title)
                     .font(.headline)
             }
@@ -454,8 +513,14 @@ struct ToggleRow: View {
     
     var body: some View {
         HStack {
-            Image(systemName: icon)
-                .foregroundColor(.accentColor)
+            if let customIcon = NSImage(named: icon) {
+                Image(nsImage: customIcon)
+                    .resizable()
+                    .frame(width: 20, height: 20)
+            } else {
+                Image(systemName: icon)
+                    .foregroundColor(.accentColor)
+            }
             VStack(alignment: .leading) {
                 Text(title)
                     .fontWeight(.medium)
@@ -479,9 +544,16 @@ struct StatusCard: View {
     
     var body: some View {
         VStack(spacing: 8) {
-            Image(systemName: icon)
-                .font(.title2)
-                .foregroundColor(color)
+            if let customIcon = NSImage(named: icon) {
+                Image(nsImage: customIcon)
+                    .resizable()
+                    .frame(width: 24, height: 24)
+                    .foregroundColor(color)
+            } else {
+                Image(systemName: icon)
+                    .font(.title2)
+                    .foregroundColor(color)
+            }
             Text(value)
                 .font(.title3)
                 .fontWeight(.semibold)
