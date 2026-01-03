@@ -12,10 +12,16 @@ build
 cov-int
 /MacKernelSDK
 
-# ACPI tables (machine-specific)
-ACPI-Gram/
+# ACPI tables (Dumped from Clover)
+!ACPI-Gram/
+!ACPI-Gram/**/*.dsl
+!ACPI-Gram/**/*.aml
+
+# ACPI tables (Custom SSDT)
+!GramSMC/*.dsl
+
+# Ignore other random ACPI files
 *.aml
-*.dsl
 
 # Reference projects
 YogaSMC-Reference/

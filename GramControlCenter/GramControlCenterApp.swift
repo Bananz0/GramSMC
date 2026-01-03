@@ -245,7 +245,7 @@ struct SettingsView: View {
                                     .fontWeight(.medium)
                                 Spacer()
                             }
-                            Text("Control fan behavior: Optimal, Silent, or Performance")
+                            Text("Control fan behavior: Normal or Silent")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                             
@@ -253,9 +253,8 @@ struct SettingsView: View {
                                 get: { Int(controller.fanMode) },
                                 set: { controller.setFanMode(UInt32($0)) }
                             )) {
-                                Text("Optimal").tag(0)
+                                Text("Normal").tag(0)
                                 Text("Silent").tag(1)
-                                Text("Performance").tag(2)
                             }
                             .pickerStyle(.segmented)
                             .disabled(!controller.isConnected)
@@ -355,30 +354,16 @@ struct SettingsView: View {
                     
                     // Display Section
                     SettingsSection(title: "Display", icon: "icon_display_n") {
-                        HStack {
-                            if let icon = NSImage(named: "icon_display_Kelvin") {
-                                Image(nsImage: icon)
-                                    .resizable()
-                                    .frame(width: 20, height: 20)
-                            } else {
-                                Image(systemName: "moon.fill")
-                                    .foregroundColor(.orange)
-                            }
-                            VStack(alignment: .leading) {
-                                Text("Night Light")
-                                    .fontWeight(.medium)
-                                Text("Reduce blue light for comfortable reading")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-                            Spacer()
-                            Button("Open Display Settings") {
-                                if let url = URL(string: "x-apple.systempreferences:com.apple.preference.displays") {
-                                    NSWorkspace.shared.open(url)
-                                }
-                            }
-                            .buttonStyle(.bordered)
-                        }
+                        ToggleRow(
+                            title: "Night Shift",
+                            subtitle: "Reduce blue light for comfortable reading (Fn+F9)",
+                            icon: "icon_display_Kelvin",
+                            isOn: Binding(
+                                get: { controller.nightShiftEnabled },
+                                set: { controller.setNightShift($0) }
+                            ),
+                            isEnabled: controller.nightShiftSupported
+                        )
                     }
                     
                     // Status Section
@@ -573,7 +558,7 @@ struct StatusCard: View {
 class GramSMCController: ObservableObject {
     @Published var capabilities: UInt32 = 0
     @Published var keyboardBacklight: Int = 0  // 0=Off, 1=Low, 2=High
-    @Published var fanMode: UInt32 = 0          // 0=Optimal, 1=Silent, 2=Performance
+    @Published var fanMode: UInt32 = 0          // 0=Normal, 1=Silent
     @Published var batteryCareLimit: Int = 100
     @Published var usbCharging: Bool = false
     @Published var fnLock: Bool = false
@@ -581,13 +566,17 @@ class GramSMCController: ObservableObject {
     @Published var fanRPM: Int = 0
     @Published var isConnected: Bool = false
     @Published var kextVersion: String = "Unknown"
+    @Published var nightShiftEnabled: Bool = false
+    @Published var nightShiftSupported: Bool = false
+    
+    // Night Shift client (private CoreBrightness API)
+    private var blueLightClient: CBBlueLightClient?
     
     // Computed property for fan mode string
     var fanModeString: String {
         switch fanMode {
-        case 0: return "Optimal"
+        case 0: return "Normal"
         case 1: return "Silent"
-        case 2: return "Performance"
         default: return "Unknown"
         }
     }
@@ -595,6 +584,11 @@ class GramSMCController: ObservableObject {
     private var service: io_service_t = 0
     
     init() {
+        // Initialize Night Shift client
+        blueLightClient = CBBlueLightClient()
+        nightShiftSupported = CBBlueLightClient.supportsBlueLightReduction()
+        refreshNightShift()
+        
         connect()
         refresh()
     }
@@ -725,5 +719,25 @@ class GramSMCController: ObservableObject {
         guard service != 0 else { return }
         let number = NSNumber(value: value)
         IORegistryEntrySetCFProperty(service, name as CFString, number)
+    }
+    
+    // MARK: - Night Shift Control (via CBBlueLightClient)
+    
+    func refreshNightShift() {
+        guard nightShiftSupported, let client = blueLightClient else { return }
+        var status = Status()
+        if client.getBlueLightStatus(&status) {
+            nightShiftEnabled = status.enabled
+        }
+    }
+    
+    func setNightShift(_ enabled: Bool) {
+        guard nightShiftSupported, let client = blueLightClient else { return }
+        nightShiftEnabled = enabled
+        client.setEnabled(enabled)
+    }
+    
+    func toggleNightShift() {
+        setNightShift(!nightShiftEnabled)
     }
 }

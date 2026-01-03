@@ -275,7 +275,7 @@ void GramSMC::setPropertiesGated(OSObject *props) {
   value = OSDynamicCast(OSNumber, dict->getObject("FanMode"));
   if (value != nullptr) {
     uint32_t mode = value->unsigned32BitValue();
-    if (mode <= kFanModePerformance) {
+    if (mode <= kFanModeSilent) {
       setFanMode(mode);
       SYSLOG("gram", "setProperties: FanMode set to %u", mode);
     }
@@ -595,16 +595,14 @@ uint32_t GramSMC::getFanMode() {
 }
 
 void GramSMC::setFanMode(uint32_t mode) {
-  if (gramDevice && mode <= kFanModePerformance) {
+  if (gramDevice && mode <= kFanModeSilent) {
     OSNumber *arg = OSNumber::withNumber(mode, 32);
     gramDevice->evaluateObject("SFMD", NULL, (OSObject **)&arg, 1);
     arg->release();
     currentFanMode = mode;
     setProperty("FanMode", mode, 32);
     DBGLOG("gram", "Fan mode set to %u (%s)", mode,
-           mode == kFanModeOptimal  ? "Optimal"
-           : mode == kFanModeSilent ? "Silent"
-                                    : "Performance");
+           mode == kFanModeNormal ? "Normal" : "Silent");
   }
 }
 

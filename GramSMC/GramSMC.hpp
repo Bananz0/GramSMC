@@ -36,10 +36,9 @@
 #define kCapFnLock 0x10
 #define kCapWebcam 0x20
 
-// Fan Modes
-#define kFanModeOptimal 0
+// Fan Modes (matching LG Control Center: Normal and Silent only)
+#define kFanModeNormal 0
 #define kFanModeSilent 1
-#define kFanModePerformance 2
 
 // LG Gram specific event codes (from SSDT-GramSMC)
 #define GRAM_EVENT_BRIGHTNESS_DOWN 0x10
