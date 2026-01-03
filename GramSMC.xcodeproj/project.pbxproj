@@ -563,6 +563,11 @@
 			outputFileListPaths = (
 			);
 			outputPaths = (
+				"$(SRCROOT)/build/$(CONFIGURATION)/GramSMC.kext",
+				"$(SRCROOT)/build/$(CONFIGURATION)/GramControlCenter.app",
+				"$(SRCROOT)/build/$(CONFIGURATION)/GramSMCDaemon",
+				"$(SRCROOT)/build/$(CONFIGURATION)/com.bananz0.GramSMCDaemon.plist",
+				"$(SRCROOT)/build/$(CONFIGURATION)/install.sh",
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
@@ -806,7 +811,7 @@
 				KERNEL_FRAMEWORK_HEADERS = "$(PROJECT_DIR)/MacKernelSDK/Headers";
 				LIBRARY_SEARCH_PATHS = "$(PROJECT_DIR)/MacKernelSDK/Library/x86_64";
 				MACOSX_DEPLOYMENT_TARGET = 10.11;
-				MODULE_VERSION = 1.4.1;
+				MODULE_VERSION = 1.5.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -865,7 +870,7 @@
 				KERNEL_FRAMEWORK_HEADERS = "$(PROJECT_DIR)/MacKernelSDK/Headers";
 				LIBRARY_SEARCH_PATHS = "$(PROJECT_DIR)/MacKernelSDK/Library/x86_64";
 				MACOSX_DEPLOYMENT_TARGET = 10.11;
-				MODULE_VERSION = 1.4.1;
+				MODULE_VERSION = 1.5.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				SDKROOT = macosx;
@@ -885,8 +890,8 @@
 				CURRENT_PROJECT_VERSION = 1.5.0;
 				DEAD_CODE_STRIPPING = YES;
 				GCC_PREPROCESSOR_DEFINITIONS = (
+
 					"MODULE_VERSION=$(MODULE_VERSION)",
-					"PRODUCT_NAME=$(PRODUCT_NAME)",
 					"$(inherited)",
 				);
 				HEADER_SEARCH_PATHS = (
@@ -916,8 +921,8 @@
 				CURRENT_PROJECT_VERSION = 1.5.0;
 				DEAD_CODE_STRIPPING = YES;
 				GCC_PREPROCESSOR_DEFINITIONS = (
+
 					"MODULE_VERSION=$(MODULE_VERSION)",
-					"PRODUCT_NAME=$(PRODUCT_NAME)",
 					"$(inherited)",
 				);
 				HEADER_SEARCH_PATHS = (

@@ -11,19 +11,16 @@
 
 #include "GramSMC.hpp"
 
-#ifndef ADDPR
-#define ADDPR(x) x
-#endif
-
-bool ADDPR(debugEnabled) = false;
-uint32_t ADDPR(debugPrintDelay) = 0;
+// Define the debug flags declared as extern in GramSMC.hpp
+bool GramSMC_debugEnabled = false;
+uint32_t GramSMC_debugPrintDelay = 0;
 
 #define super IOService
 OSDefineMetaClassAndStructors(GramSMC, IOService)
 
     bool GramSMC::setProperty(const char *key, uint64_t value, int width) {
   OSNumber *num = OSNumber::withNumber(value, width);
-  if (!num)
+  if (num == nullptr)
     return false;
   bool res = setProperty(key, num);
   num->release();

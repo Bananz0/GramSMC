@@ -23,10 +23,14 @@
 #include "../VirtualAppleKeyboard/VirtualAppleKeyboard.hpp"
 #include "KeyImplementations.hpp"
 
-#define GramSMCEventCode 0x4752414D // 'GRAM'
-
 #define PRODUCT_NAME GramSMC
-#define MODULE_VERSION 1.5.0
+
+// Lilu's ADDPR macro is now defined via KeyImplementations.hpp includes
+// Declare the debug flags that will be defined in GramSMC.cpp
+extern bool ADDPR(debugEnabled);
+extern uint32_t ADDPR(debugPrintDelay);
+
+#define GramSMCEventCode 0x4752414D // 'GRAM'
 
 // LG Gram capabilities bits (matches LG Control Center)
 #define kCapFanMode 0x01
