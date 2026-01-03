@@ -16,8 +16,10 @@ cov-int
 *.aml
 *.dsl
 
-# ACPI tables (Dumped from Clover) 
-!ACPI-Gram/*
+# ACPI tables (Dumped from Clover)
+!ACPI-Gram/*.dsl
+!ACPI-Gram/Decompiled/*.dsl
+!ACPI-Gram/Dump/*.aml
 
 # ACPI tables (Custom SSDT)
 !GramSMC/*.dsl
@@ -27,3 +29,4 @@ YogaSMC-Reference/
 AsusSMC-Reference/
 
 ## didnt know gitignore was sequential LMAO 
+#live laugh liao

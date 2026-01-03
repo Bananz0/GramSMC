@@ -12,7 +12,7 @@
 //    - USB Charging (0xBE): Off/On
 //    - Fn Lock (0x73): Off/On
 //
-//  Copyright © 2024-2025 GramSMC contributors.
+//  Copyright © 2026 Glen Muthoka Mutinda.
 //
 
 import SwiftUI

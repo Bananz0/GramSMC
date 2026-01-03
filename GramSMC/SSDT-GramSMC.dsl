@@ -18,7 +18,7 @@
  *   FRPM (0xCB) - Fan RPM (raw, *100 = approx RPM)
  *   FNKN (0xE4) - Last Fn key code pressed
  *
- * Copyright (c) 2024-2025
+ * Copyright (c) 2026 Glen Muthoka Mutinda
  */
 
 DefinitionBlock ("", "SSDT", 2, "GRAM", "GramSMC", 0x00002000)

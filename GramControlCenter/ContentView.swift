@@ -3,7 +3,7 @@
 //  GramControlCenter
 //
 //  Created by Glen Muthoka on 01/01/2026.
-//  Copyright © 2026 GramSMC contributors. All rights reserved.
+//  Copyright © 2026 Glen Muthoka Mutinda. All rights reserved.
 //
 
 import SwiftUI

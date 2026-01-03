@@ -6,7 +6,7 @@
 //  Modified for LG Gram laptops
 //
 //  Copyright © 2018-2020 Le Bao Hiep. All rights reserved.
-//  Copyright © 2024-2025 GramSMC contributors.
+//  Copyright © 2026 Glen Muthoka Mutinda.
 //
 
 #define GramSMCEventCode 0x80
