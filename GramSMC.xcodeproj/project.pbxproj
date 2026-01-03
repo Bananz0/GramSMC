@@ -548,7 +548,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "#!/bin/bash\nset -euo pipefail\n\n# Colors (optional)\nRED='\\033[0;31m'\nGREEN='\\033[0;32m'\nBLUE='\\033[0;34m'\nNC='\\033[0m' # No Color\n\n# Source and output paths using Xcode env vars\n# Adjust SSDT_SRC if your DSL lives elsewhere\nSSDT_SRC=\"${SRCROOT}/GramSMC/SSDT-GramSMC.dsl\"\n\n# Built products output (what Xcode expects)\nBUILT_OUT_DIR=\"${BUILT_PRODUCTS_DIR}\"\nSSDT_AML_BUILT=\"${BUILT_OUT_DIR}/SSDT-GramSMC.aml\"\n\n# Repo-local collection directory (so you have a neat folder with artifacts)\nCOLLECT_OUT_DIR=\"${SRCROOT}/Build/${CONFIGURATION}\"\nSSDT_AML_COLLECT=\"${COLLECT_OUT_DIR}/SSDT-GramSMC.aml\"\n\necho -e \"${BLUE}Building SSDT-GramSMC...${NC}\"\n\nif [ ! -f \"${SSDT_SRC}\" ]; then\n  echo -e \"${RED}Error: SSDT source not found: ${SSDT_SRC}${NC}\"\n  exit 1\nfi\n\n# Check iasl availability\nif ! command -v iasl >/dev/null 2>&1; then\n  echo -e \"${RED}Error: iasl compiler not found. Install via:${NC}\"\n  echo -e \"${RED}  brew install acpica${NC}\"\n  exit 1\nfi\n\n# Compile SSDT in place (iasl outputs AML in the same directory)\nSSDT_DIR=\"$(dirname \"${SSDT_SRC}\")\"\npushd \"${SSDT_DIR}\" >/dev/null\niasl -ve -tc \"${SSDT_SRC}\" || {\n  echo -e \"${RED}Error: Failed to compile SSDT${NC}\"\n  exit 1\n}\npopd >/dev/null\n\n# Ensure output directories exist\nmkdir -p \"${BUILT_OUT_DIR}\"\nmkdir -p \"${COLLECT_OUT_DIR}\"\n\n# Copy AML to built products and collection directory\ncp \"${SSDT_DIR}/SSDT-GramSMC.aml\" \"${SSDT_AML_BUILT}\"\ncp \"${SSDT_DIR}/SSDT-GramSMC.aml\" \"${SSDT_AML_COLLECT}\"\n\n# Also copy DSL for reference into both locations (best-effort)\ncp \"${SSDT_SRC}\" \"${BUILT_OUT_DIR}/\" || true\ncp \"${SSDT_SRC}\" \"${COLLECT_OUT_DIR}/\" || true\n\n# Stamp file for Xcode dependency analysis (declare as Output File)\ntouch \"${BUILT_PRODUCTS_DIR}/.compile_ssdt_stamp\"\n\necho -e \"${GREEN}✓ SSDT compiled successfully:${NC}\"\necho -e \"${GREEN}  - ${SSDT_AML_BUILT}${NC}\"\necho -e \"${GREEN}  - ${SSDT_AML_COLLECT}${NC}\"\n";
+			shellScript = "#!/bin/bash\nset -euo pipefail\n\n# Colors (optional)\nRED='\\033[0;31m'\nGREEN='\\033[0;32m'\nBLUE='\\033[0;34m'\nNC='\\033[0m' # No Color\n\n# Source and output paths using Xcode env vars\n# Adjust SSDT_SRC if your DSL lives elsewhere\nSSDT_SRC=\"${SRCROOT}/GramSMC/SSDT-GramSMC.dsl\"\n\n# Built products output (what Xcode expects)\nBUILT_OUT_DIR=\"${BUILT_PRODUCTS_DIR}\"\nSSDT_AML_BUILT=\"${BUILT_OUT_DIR}/SSDT-GramSMC.aml\"\n\n# Repo-local collection directory (so you have a neat folder with artifacts)\nCOLLECT_OUT_DIR=\"${SRCROOT}/Build/${CONFIGURATION}\"\nSSDT_AML_COLLECT=\"${COLLECT_OUT_DIR}/SSDT-GramSMC.aml\"\n\necho -e \"${BLUE}Building SSDT-GramSMC...${NC}\"\n\nif [ ! -f \"${SSDT_SRC}\" ]; then\n  echo -e \"${RED}Error: SSDT source not found: ${SSDT_SRC}${NC}\"\n  exit 1\nfi\n\n# Check iasl availability\nif ! command -v iasl >/dev/null 2>&1; then\n  echo -e \"${RED}Error: iasl compiler not found. Install via:${NC}\"\n  echo -e \"${RED}  brew install acpica${NC}\"\n  exit 1\nfi\n\n# Ensure output directories exist\nmkdir -p \"${BUILT_OUT_DIR}\"\nmkdir -p \"${COLLECT_OUT_DIR}\"\n\n# Compile SSDT directly to built products directory\n# -p specifies the output filename prefix (iasl appends .aml)\necho -e \"${BLUE}Compiling to ${SSDT_AML_BUILT}...${NC}\"\niasl -ve -p \"${SSDT_AML_BUILT}\" \"${SSDT_SRC}\" || {\n  echo -e \"${RED}Error: Failed to compile SSDT${NC}\"\n  exit 1\n}\n\n# Copy AML to collection directory\ncp \"${SSDT_AML_BUILT}\" \"${SSDT_AML_COLLECT}\"\n\n# Also copy DSL for reference into both locations (best-effort)\ncp \"${SSDT_SRC}\" \"${BUILT_OUT_DIR}/\" || true\ncp \"${SSDT_SRC}\" \"${COLLECT_OUT_DIR}/\" || true\n\n# Stamp file for Xcode dependency analysis (declare as Output File)\ntouch \"${BUILT_PRODUCTS_DIR}/.compile_ssdt_stamp\"\n\necho -e \"${GREEN}✓ SSDT compiled successfully:${NC}\"\necho -e \"${GREEN}  - ${SSDT_AML_BUILT}${NC}\"\necho -e \"${GREEN}  - ${SSDT_AML_COLLECT}${NC}\"\n";
 		};
 		314E657B2F08194000A79975 /* Final Folder */ = {
 			isa = PBXShellScriptBuildPhase;
@@ -702,6 +702,8 @@
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
+				SWIFT_OBJC_BRIDGING_HEADER = "GramControlCenter/GramControlCenter-Bridging-Header.h";
+				OTHER_LDFLAGS = "$(inherited) -framework CoreBrightness -F/System/Library/PrivateFrameworks";
 			};
 			name = Debug;
 		};
@@ -743,6 +745,8 @@
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
+				SWIFT_OBJC_BRIDGING_HEADER = "GramControlCenter/GramControlCenter-Bridging-Header.h";
+				OTHER_LDFLAGS = "$(inherited) -framework CoreBrightness -F/System/Library/PrivateFrameworks";
 			};
 			name = Release;
 		};

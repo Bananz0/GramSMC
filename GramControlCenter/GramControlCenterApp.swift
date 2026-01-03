@@ -725,9 +725,9 @@ class GramSMCController: ObservableObject {
     
     func refreshNightShift() {
         guard nightShiftSupported, let client = blueLightClient else { return }
-        var status = Status()
+        var status = GStatus()
         if client.getBlueLightStatus(&status) {
-            nightShiftEnabled = status.enabled
+            nightShiftEnabled = status.enabled.boolValue
         }
     }
     

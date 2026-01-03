@@ -11,41 +11,41 @@
 
 #import <Foundation/Foundation.h>
 
+typedef struct {
+  int hour;
+  int minute;
+} GTime;
+
+typedef struct {
+  GTime fromTime;
+  GTime toTime;
+} GSchedule;
+
+typedef struct {
+  BOOL active;
+  BOOL enabled;
+  BOOL sunSchedulePermitted;
+  int mode;
+  GSchedule schedule;
+  unsigned long long disableFlags;
+  BOOL available;
+} GStatus;
+
+typedef struct {
+  float minCCT;
+  float maxCCT;
+  float midCCT;
+} GCCTRange;
+
 @interface CBBlueLightClient : NSObject
-
-typedef struct {
-    int hour;
-    int minute;
-} Time;
-
-typedef struct {
-    Time fromTime;
-    Time toTime;
-} Schedule;
-
-typedef struct {
-    BOOL active;
-    BOOL enabled;
-    BOOL sunSchedulePermitted;
-    int mode;
-    Schedule schedule;
-    unsigned long long disableFlags;
-    BOOL available;
-} Status;
-
-typedef struct {
-    float minCCT;
-    float maxCCT;
-    float midCCT;
-} CCTRange;
 
 // Existing methods
 - (BOOL)setStrength:(float)strength commit:(BOOL)commit;
 - (BOOL)setEnabled:(BOOL)enabled;
 - (BOOL)setMode:(int)mode;
-- (BOOL)setSchedule:(Schedule *)schedule;
+- (BOOL)setSchedule:(GSchedule *)schedule;
 - (BOOL)getStrength:(float *)strength;
-- (BOOL)getBlueLightStatus:(Status *)status;
+- (BOOL)getBlueLightStatus:(GStatus *)status;
 - (void)setStatusNotificationBlock:(void (^)(void))block;
 + (BOOL)supportsBlueLightReduction;
 
@@ -53,9 +53,9 @@ typedef struct {
 - (BOOL)setCCT:(float)cct commit:(BOOL)commit;
 - (BOOL)setCCT:(float)cct withPeriod:(float)period commit:(BOOL)commit;
 - (BOOL)getCCT:(float *)cct;
-- (BOOL)getCCTRange:(CCTRange *)range;
-- (BOOL)setCCTRange:(CCTRange *)range;
-- (BOOL)getDefaultCCTRange:(CCTRange *)range;
+- (BOOL)getCCTRange:(GCCTRange *)range;
+- (BOOL)setCCTRange:(GCCTRange *)range;
+- (BOOL)getDefaultCCTRange:(GCCTRange *)range;
 
 // Additional status and control methods
 - (BOOL)setActive:(BOOL)active;

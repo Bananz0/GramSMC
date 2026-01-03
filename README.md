@@ -209,9 +209,16 @@ GramSMC supports two fan modes matching the original LG Control Center:
 ```
 git clone https://github.com/acidanthera/MacKernelSDK
 cd GramSMC
-curl -Lfs https://raw.githubusercontent.com/hieplpvip/AsusSMC/master/Scripts/bootstrap.sh | bash
-xcodebuild -configuration Release
+bash Scripts/bootstrap.sh
+xcodebuild -project GramSMC.xcodeproj \
+           -scheme 'GramSMC All' \
+           -configuration Release \
+           -derivedDataPath build \
+           build
 ```
+
+Artifacts will be located in `build/Release/`.
+
 
 
 ## Research Data
