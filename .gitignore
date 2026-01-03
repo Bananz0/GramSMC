@@ -12,22 +12,18 @@ build
 cov-int
 /MacKernelSDK
 
-# ACPI tables (Dumped from Clover)
-!ACPI-Gram/
-!ACPI-Gram/**/*.dsl
-!ACPI-Gram/**/*.aml
+# Ignore other random ACPI files
+*.aml
+*.dsl
+
+# ACPI tables (Dumped from Clover) 
+!ACPI-Gram/*
 
 # ACPI tables (Custom SSDT)
 !GramSMC/*.dsl
 
-# Ignore other random ACPI files
-*.aml
-
 # Reference projects
 YogaSMC-Reference/
+AsusSMC-Reference/
 
-# Extra documentation (keep only README.md)
-INSTALLATION_GUIDE.md
-OPENCORE_INSTALLATION.md
-REFACTORING_SUMMARY.md
-TESTING_GUIDE.md
+## didnt know gitignore was sequential LMAO 

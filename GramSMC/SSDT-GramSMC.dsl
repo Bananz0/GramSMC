@@ -8,7 +8,7 @@
  * 
  * CONFIRMED EC Registers (via 81 dump analysis):
  *   KBLV (0x72) - Keyboard Backlight: 0x80=Off, 0xA2=Low, 0xA4=High
- *   FNLK (0x73) - Fn Lock: 0x00=ON, 0x04=OFF (inverted!)
+ *   FNLK (0x73) - Fn Lock: 0x00=OFF, 0x04=ON 
  *   BCLM (0xBC) - Battery Care Limit: 0x50=80%, 0x64=100%
  *   USBC (0xBE) - USB Charging: 0x00=Off, 0x01=On
  *   SLNT (0xCF) - Silent Mode: 0x00=Normal, 0x11=Silent
