@@ -9,7 +9,7 @@
 //  Copyright © 2026 Glen Muthoka Mutinda.
 //
 
-#define GramSMCEventCode 0x80
+#define GramSMCEventCode 0x4752414D
 
 #import "BezelServices.h"
 #import "OSD.h"

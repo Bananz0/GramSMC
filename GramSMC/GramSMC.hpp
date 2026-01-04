@@ -91,6 +91,7 @@ protected:
 
   bool refreshALS(bool post);
   bool refreshFan();
+  void refreshECStates();
 
   // LG Control Center Features
   uint32_t getCapabilities();

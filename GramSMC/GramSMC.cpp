@@ -325,15 +325,10 @@ void GramSMC::setPropertiesGated(OSObject *props) {
   if (value != nullptr && hasKeyboardBacklight) {
     uint32_t level = value->unsigned32BitValue();
     if (level <= 2) {
-      // Map 0-2 levels to EC values at 0x72:
-      // 0 = Off  (0x80: KBBR=0, WSLP=0, KBBM=0, KBBS=1)
-      // 1 = Low  (0xA2: KBBR=2, WSLP=0, KBBM=1, KBBS=1)
-      // 2 = High (0xA4: KBBR=4, WSLP=0, KBBM=1, KBBS=1)
-      uint32_t ecValue = (level == 0) ? 0x80 : ((level == 1) ? 0xA2 : 0xA4);
-      setKeyboardBacklight(ecValue);
+      // Pass abstract level to SSDT SKBL method (it handles EC mapping)
+      setKeyboardBacklight(level);
       setProperty("KeyboardBacklight", level, 32);
-      SYSLOG("gram", "setProperties: KeyboardBacklight level %u (EC: 0x%02X)",
-             level, ecValue);
+      SYSLOG("gram", "setProperties: KeyboardBacklight level %u", level);
     }
   }
 }
@@ -551,6 +546,78 @@ bool GramSMC::refreshFan() {
   return speed != 10000;
 }
 
+void GramSMC::refreshECStates() {
+  // Refresh all EC-controlled states and update properties
+  // This ensures the App stays in sync with hardware changes
+  
+  // Keyboard Backlight
+  if (hasKeyboardBacklight) {
+    uint32_t kbl = getKeyboardBacklight();
+    setProperty("KeyboardBacklight", kbl, 32);
+  }
+  
+  // Fan Mode (Silent Mode)
+  if (capabilities & kCapFanMode) {
+    uint32_t mode = getFanMode();
+    if (mode != currentFanMode) {
+      currentFanMode = mode;
+      setProperty("FanMode", mode, 32);
+      DBGLOG("gram", "refreshECStates: FanMode changed to %u", mode);
+    }
+  }
+  
+  // Battery Care Limit
+  if (capabilities & kCapBatteryCare) {
+    uint32_t limit = getBatteryCareLimit();
+    if (limit != currentBatteryCareLimit) {
+      currentBatteryCareLimit = limit;
+      setProperty("BatteryCareLimit", limit, 32);
+      DBGLOG("gram", "refreshECStates: BatteryCareLimit changed to %u", limit);
+    }
+  }
+  
+  // USB Charging
+  if (capabilities & kCapUSBCharging) {
+    bool usb = getUSBCharging();
+    if (usb != currentUSBCharging) {
+      currentUSBCharging = usb;
+      setProperty("USBCharging", usb);
+      DBGLOG("gram", "refreshECStates: USBCharging changed to %s", usb ? "true" : "false");
+    }
+  }
+  
+  // Fn Lock
+  if (capabilities & kCapFnLock) {
+    bool fnl = getFnLock();
+    if (fnl != currentFnLock) {
+      currentFnLock = fnl;
+      setProperty("FnLock", fnl);
+      DBGLOG("gram", "refreshECStates: FnLock changed to %s", fnl ? "true" : "false");
+    }
+  }
+  
+  // Webcam (if supported)
+  if (capabilities & kCapWebcam) {
+    bool wcm = getWebcam();
+    if (wcm != currentWebcam) {
+      currentWebcam = wcm;
+      setProperty("Webcam", wcm);
+      DBGLOG("gram", "refreshECStates: Webcam changed to %s", wcm ? "true" : "false");
+    }
+  }
+  
+  // CPU Temperature & Fan RPM (always refresh)
+  uint32_t temp = 0;
+  if (gramDevice && gramDevice->evaluateInteger("GTMP", &temp) == kIOReturnSuccess) {
+    setProperty("CPUTemp", temp, 32);
+  }
+  
+  if (isTACHAvailable) {
+    refreshFan();
+    setProperty("FanRPM", (uint32_t)atomic_load(&currentFanSpeed), 32);
+  }
+}
+
 uint32_t GramSMC::getKeyboardBacklight() {
   uint32_t level = 0;
   if (gramDevice &&
@@ -604,7 +671,7 @@ void GramSMC::setFanMode(uint32_t mode) {
 }
 
 void GramSMC::cycleFanMode() {
-  uint32_t newMode = (getFanMode() + 1) % 3;
+  uint32_t newMode = (getFanMode() + 1) % 2;  // Only 2 modes: Normal (0) and Silent (1)
   setFanMode(newMode);
   kev.sendMessage(kDaemonFanMode, newMode, 0);
 }
@@ -747,6 +814,31 @@ void GramSMC::handleMessage(int code) {
     }
     break;
 
+  // Keyboard Backlight Level Events (from SSDT CKBL: 0xC0 + level)
+  case 0xC0: // Backlight Off
+    if (hasKeyboardBacklight) {
+      setProperty("KeyboardBacklight", 0, 32);
+      kev.sendMessage(kDaemonKeyboardBacklight, 0, 0);
+      DBGLOG("gram", "Keyboard backlight set to Off via hardware");
+    }
+    break;
+
+  case 0xC1: // Backlight Low
+    if (hasKeyboardBacklight) {
+      setProperty("KeyboardBacklight", 1, 32);
+      kev.sendMessage(kDaemonKeyboardBacklight, 1, 0);
+      DBGLOG("gram", "Keyboard backlight set to Low via hardware");
+    }
+    break;
+
+  case 0xC2: // Backlight High
+    if (hasKeyboardBacklight) {
+      setProperty("KeyboardBacklight", 2, 32);
+      kev.sendMessage(kDaemonKeyboardBacklight, 2, 0);
+      DBGLOG("gram", "Keyboard backlight set to High via hardware");
+    }
+    break;
+
   case GRAM_EVENT_SLEEP: // 0x5E
     letSleep();
     break;
@@ -824,6 +916,10 @@ void GramSMC::handleMessage(int code) {
     }
     break;
   }
+
+  // After handling any event, refresh all EC states to catch any hardware changes
+  // This ensures Fn Lock, Silent Mode, etc. are synced even if no specific event exists
+  refreshECStates();
 
   DBGLOG("gram", "Received key %d(0x%x)", code, code);
 }
@@ -1064,6 +1160,7 @@ bool GramSMC::vsmcNotificationHandler(void *sensors, void *refCon,
           if (ls) {
             ls->refreshALS(true);
             ls->refreshFan();
+            ls->refreshECStates();
           }
         };
 

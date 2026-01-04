@@ -256,7 +256,7 @@ DefinitionBlock ("", "SSDT", 2, "GRAM", "GramSMC", 0x00002000)
             // ============================================
             // Fn Lock
             // EC Register: 0x73
-            // Values: 0x00=Fn Lock ON, 0x04=Fn Lock OFF (inverted!)
+            // Values: 0x00=OFF, 0x04=ON
             // ============================================
             
             // GFNL - Get Fn Lock State
@@ -266,8 +266,8 @@ DefinitionBlock ("", "SSDT", 2, "GRAM", "GramSMC", 0x00002000)
                 If ((ECON == One))
                 {
                     Local0 = \_SB.PCI0.LPCB.H_EC.ECRX (0x73)
-                    // Inverted: 0x00 means Fn Lock is ON
-                    If ((Local0 == 0x00))
+                    // 0x04 means Fn Lock is ON
+                    If ((Local0 == 0x04))
                     {
                         Return (One)   // Fn Lock ON
                     }
@@ -284,13 +284,13 @@ DefinitionBlock ("", "SSDT", 2, "GRAM", "GramSMC", 0x00002000)
                 {
                     If ((Arg0 == Zero))
                     {
-                        // Fn Lock OFF -> write 0x04
-                        \_SB.PCI0.LPCB.H_EC.ECWX (0x73, 0x04)
+                        // Fn Lock OFF -> write 0x00
+                        \_SB.PCI0.LPCB.H_EC.ECWX (0x73, 0x00)
                     }
                     Else
                     {
-                        // Fn Lock ON -> write 0x00
-                        \_SB.PCI0.LPCB.H_EC.ECWX (0x73, 0x00)
+                        // Fn Lock ON -> write 0x04
+                        \_SB.PCI0.LPCB.H_EC.ECWX (0x73, 0x04)
                     }
                     Return (Zero)
                 }
