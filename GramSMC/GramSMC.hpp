@@ -38,7 +38,7 @@ extern uint32_t ADDPR(debugPrintDelay);
 #define kCapUSBCharging 0x04
 #define kCapReaderMode 0x08
 #define kCapFnLock 0x10
-#define kCapWebcam 0x20
+// kCapWebcam removed - not supported on 13z990-R hardware
 
 // Fan Modes (matching LG Control Center: Normal and Silent only)
 #define kFanModeNormal 0
@@ -113,9 +113,6 @@ protected:
   bool getFnLock();
   void setFnLock(bool enabled);
 
-  bool getWebcam();
-  void setWebcam(bool enabled);
-
   uint32_t getKeyboardBacklight();
 
   void setKeyboardBacklight(uint32_t level);
@@ -159,7 +156,6 @@ private:
   bool currentUSBCharging = false;
   bool currentReaderMode = false;
   bool currentFnLock = false;
-  bool currentWebcam = true;
 
   bool isPanelBackLightOn = true;
   uint32_t panelBrightnessLevel = 0;

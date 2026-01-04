@@ -12,8 +12,8 @@
 #include "GramSMC.hpp"
 
 // Define the debug flags declared as extern in GramSMC.hpp
-bool GramSMC_debugEnabled = false;
-uint32_t GramSMC_debugPrintDelay = 0;
+bool ADDPR(debugEnabled) = false;
+uint32_t ADDPR(debugPrintDelay) = 0;
 
 #define super IOService
 OSDefineMetaClassAndStructors(GramSMC, IOService)
@@ -170,12 +170,6 @@ bool GramSMC::start(IOService *provider) {
     SYSLOG("gram", "Fn lock: %s", currentFnLock ? "enabled" : "disabled");
   }
 
-  if (capabilities & kCapWebcam) {
-    currentWebcam = getWebcam();
-    setProperty("Webcam", currentWebcam);
-    SYSLOG("gram", "Webcam: %s", currentWebcam ? "enabled" : "disabled");
-  }
-
   // Expose KeyboardBacklight level (0=Off, 1=Low, 2=High)
   if (hasKeyboardBacklight) {
     uint32_t kblRaw = getKeyboardBacklight();
@@ -309,14 +303,6 @@ void GramSMC::setPropertiesGated(OSObject *props) {
   if (value != nullptr) {
     setFnLock(value->unsigned32BitValue() != 0);
     SYSLOG("gram", "setProperties: FnLock set to %u",
-           value->unsigned32BitValue());
-  }
-
-  // Webcam
-  value = OSDynamicCast(OSNumber, dict->getObject("Webcam"));
-  if (value != nullptr) {
-    setWebcam(value->unsigned32BitValue() != 0);
-    SYSLOG("gram", "setProperties: Webcam set to %u",
            value->unsigned32BitValue());
   }
 
@@ -596,16 +582,6 @@ void GramSMC::refreshECStates() {
     }
   }
   
-  // Webcam (if supported)
-  if (capabilities & kCapWebcam) {
-    bool wcm = getWebcam();
-    if (wcm != currentWebcam) {
-      currentWebcam = wcm;
-      setProperty("Webcam", wcm);
-      DBGLOG("gram", "refreshECStates: Webcam changed to %s", wcm ? "true" : "false");
-    }
-  }
-  
   // CPU Temperature & Fan RPM (always refresh)
   uint32_t temp = 0;
   if (gramDevice && gramDevice->evaluateInteger("GTMP", &temp) == kIOReturnSuccess) {
@@ -651,7 +627,7 @@ uint32_t GramSMC::getCapabilities() {
 uint32_t GramSMC::getFanMode() {
   uint32_t mode = 0;
   if (gramDevice &&
-      gramDevice->evaluateInteger("GFMD", &mode) == kIOReturnSuccess) {
+      gramDevice->evaluateInteger("GSLM", &mode) == kIOReturnSuccess) {
     currentFanMode = mode;
     return mode;
   }
@@ -661,7 +637,7 @@ uint32_t GramSMC::getFanMode() {
 void GramSMC::setFanMode(uint32_t mode) {
   if (gramDevice && mode <= kFanModeSilent) {
     OSNumber *arg = OSNumber::withNumber(mode, 32);
-    gramDevice->evaluateObject("SFMD", NULL, (OSObject **)&arg, 1);
+    gramDevice->evaluateObject("SSLM", NULL, (OSObject **)&arg, 1);
     arg->release();
     currentFanMode = mode;
     setProperty("FanMode", mode, 32);
@@ -769,27 +745,6 @@ void GramSMC::setFnLock(bool enabled) {
 // ============================================
 // Additional LG Control Center Features
 // ============================================
-
-bool GramSMC::getWebcam() {
-  uint32_t state = 1; // Default enabled
-  if (gramDevice &&
-      gramDevice->evaluateInteger("GWCM", &state) == kIOReturnSuccess) {
-    currentWebcam = (state != 0);
-    return currentWebcam;
-  }
-  return currentWebcam;
-}
-
-void GramSMC::setWebcam(bool enabled) {
-  if (gramDevice) {
-    OSNumber *arg = OSNumber::withNumber(enabled ? 1 : 0, 32);
-    gramDevice->evaluateObject("SWCM", NULL, (OSObject **)&arg, 1);
-    arg->release();
-    currentWebcam = enabled;
-    setProperty("Webcam", enabled);
-    DBGLOG("gram", "Webcam %s", enabled ? "enabled" : "disabled");
-  }
-}
 
 void GramSMC::handleMessage(int code) {
   switch (code) {

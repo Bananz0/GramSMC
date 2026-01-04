@@ -4,21 +4,54 @@
  * LG Gram SMC ACPI Support Table
  * Provides interface between macOS GramSMC kext and LG Gram EC
  *
- * EC Device: _SB.PCI0.LPCB.H_EC
+ * TARGET HARDWARE: LG Gram 13z990-R (2019 Model)
+ * EC Chip: EC6662
+ * ACPI Device: _SB.PCI0.LPCB.H_EC
  * 
- * CONFIRMED EC Registers (via 81 dump analysis):
- *   KBLV (0x72) - Keyboard Backlight: 0x80=Off, 0xA2=Low, 0xA4=High
- *   FNLK (0x73) - Fn Lock: 0x00=OFF, 0x04=ON 
- *   BCLM (0xBC) - Battery Care Limit: 0x50=80%, 0x64=100%
- *   USBC (0xBE) - USB Charging: 0x00=Off, 0x01=On
- *   SLNT (0xCF) - Silent Mode: 0x00=Normal, 0x11=Silent
- *   
- * Other registers (read-only / status):
- *   TMP1 (0xC8) - CPU Temperature
- *   FRPM (0xCB) - Fan RPM (raw, *100 = approx RPM)
- *   FNKN (0xE4) - Last Fn key code pressed
+ * IMPORTANT: This implementation is tailored for the 13z990-R model.
+ * Other LG Gram models may have different EC register layouts or use WMI interfaces.
+ * See Research/LG_GRAM_EC_WMI_REFERENCE.md for general reference (covers multiple models).
+ *
+ * CONFIRMED EC REGISTERS (verified via 21+ EC dumps, Jan 2026):
+ * ==============================================================
+ *   0x64 (RDMD) - Reader Mode: Bit 7 (0x80 mask)
+ *                 Bit 7 = 0: Reader Mode OFF
+ *                 Bit 7 = 1: Reader Mode ON (reduces blue light via LED control)
+ *
+ *   0x72 (KBLV) - Keyboard Backlight Level (full byte):
+ *                 0x80 = Off
+ *                 0xA2 = Low (brightness level 1)
+ *                 0xA4 = High (brightness level 2)
+ *
+ *   0x73 (FNLK) - Fn Lock: Bit 2 (0x04 mask)
+ *                 0x00 = OFF (Fn key needed for F1-F12)
+ *                 0x04 = ON (F1-F12 direct, Fn inverts)
+ *
+ *   0xBC (BCSP) - Battery Care Limit (full byte):
+ *                 0x50 = 80% charge limit (battery saver)
+ *                 0x64 = 100% full charge
+ *
+ *   0xBE (USCC) - USB Always-On Charging: Bit 0
+ *                 0x00 = OFF
+ *                 0x01 = ON (charges devices when laptop sleep/off)
+ *
+ *   0xCF (SLNT) - Silent Mode / Fan Control (full byte):
+ *                 0x00 = Normal mode (auto fan)
+ *                 0x11 = Silent mode (reduced fan speed)
+ *
+ * READ-ONLY STATUS REGISTERS:
+ * ===========================
+ *   0xC8 (TMP1) - CPU Temperature (Celsius)
+ *   0xCB (FRPM) - Fan RPM (raw value, multiply by ~100 for actual RPM)
+ *   0xE4 (FNKN) - Last Fn key event code
+ *
+ * NOTES:
+ * - Webcam control (0xC0 bit 5) NOT implemented - 13z990-R lacks hardware support
+ * - USB-C Source/Sink modes NOT in EC space (handled by separate PD controller)
+ * - Settings (USB charging, battery limit) reset to defaults on boot
  *
  * Copyright (c) 2026 Glen Muthoka Mutinda
+ * Based on EC analysis and DSDT reverse engineering
  */
 
 DefinitionBlock ("", "SSDT", 2, "GRAM", "GramSMC", 0x00002000)
@@ -254,9 +287,54 @@ DefinitionBlock ("", "SSDT", 2, "GRAM", "GramSMC", 0x00002000)
             }
             
             // ============================================
+            // Reader Mode (Blue Light Filter)
+            // EC Register: 0x64, Bit 7 (0x80 mask)
+            // Controls LED-level blue light reduction
+            // ============================================
+            
+            // GRDM - Get Reader Mode State
+            // Returns: 0=Off, 1=On
+            Method (GRDM, 0, Serialized)
+            {
+                If ((ECON == One))
+                {
+                    Local0 = \_SB.PCI0.LPCB.H_EC.ECRX (0x64)
+                    // Check bit 7 (0x80)
+                    If ((Local0 & 0x80))
+                    {
+                        Return (One)   // Reader Mode ON
+                    }
+                }
+                Return (Zero)  // Reader Mode OFF
+            }
+            
+            // SRDM - Set Reader Mode State
+            // Arg0: 0=Off, 1=On
+            // Returns: 0 on success
+            Method (SRDM, 1, Serialized)
+            {
+                If ((ECON == One))
+                {
+                    Local0 = \_SB.PCI0.LPCB.H_EC.ECRX (0x64)
+                    If ((Arg0 == Zero))
+                    {
+                        // Clear bit 7 (Reader Mode OFF)
+                        Local0 &= 0x7F
+                    }
+                    Else
+                    {
+                        // Set bit 7 (Reader Mode ON)
+                        Local0 |= 0x80
+                    }
+                    \_SB.PCI0.LPCB.H_EC.ECWX (0x64, Local0)
+                    Return (Zero)
+                }
+                Return (One)  // Error
+            }
+            
+            // ============================================
             // Fn Lock
-            // EC Register: 0x73
-            // Values: 0x00=OFF, 0x04=ON
+            // EC Register: 0x73, Bit 2 (0x04 mask)
             // ============================================
             
             // GFNL - Get Fn Lock State
@@ -350,20 +428,21 @@ DefinitionBlock ("", "SSDT", 2, "GRAM", "GramSMC", 0x00002000)
             // ============================================
             
             // GCAP - Get Capabilities
-            // Returns bitmask of supported features:
-            //   Bit 0: Silent Mode
-            //   Bit 1: Battery Care
-            //   Bit 2: USB Charging
-            //   Bit 3: Fn Lock
-            //   Bit 4: Keyboard Backlight
-            //   Bit 5: Temperature Reading
-            //   Bit 6: Fan Speed Reading
+            // Returns bitmask of supported features for LG Gram 13z990-R:
+            //   Bit 0 (0x01): Fan Mode (Silent Mode)
+            //   Bit 1 (0x02): Battery Care Limit
+            //   Bit 2 (0x04): USB Always-On Charging
+            //   Bit 3 (0x08): Reader Mode (Blue Light Filter)
+            //   Bit 4 (0x10): Fn Lock
+            //   Bit 5 (0x20): Webcam Control (NOT SUPPORTED on 13z990-R)
+            // Result: 0x1F (bits 0-4 set, bit 5 clear)
             Method (GCAP, 0, Serialized)
             {
                 If ((ECON == One))
                 {
-                    // All features confirmed available
-                    Return (0x7F)  // Bits 0-6 set
+                    // Bits 0-4: Silent, Battery, USB, Reader, FnLock
+                    // Bit 5 (Webcam) = 0 (not supported on this model)
+                    Return (0x1F)
                 }
                 Return (Zero)
             }

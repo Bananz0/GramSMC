@@ -43,11 +43,8 @@ enum {
   kDaemonSleep = 3,
   kDaemonTouchpad = 4,
   kDaemonFanMode = 5,
-  kDaemonBatteryCare = 6,
-  kDaemonUSBCharging = 7,
-  kDaemonReaderMode = 8,
-  kDaemonFnLock = 9,
-  kDaemonWebcam = 10,
+  kDaemonReaderMode = 6,
+  // Note: Battery Care, USB Charging, Fn Lock handled via IORegistry, not kernel events
 };
 
 struct GramSMCMessage {
@@ -284,12 +281,8 @@ int main(int argc, const char *argv[]) {
           showOSD(OSDGraphicNoWiFi, message->x, 2);
         }
         break;
-      case kDaemonBatteryCare:
-      case kDaemonUSBCharging:
       case kDaemonReaderMode:
-      case kDaemonFnLock:
-      case kDaemonWebcam:
-        // These features toggle silently without OSD
+        // Reader mode toggle - silent operation, no OSD
         break;
         // default:
         // printf("unknown type %d\n", message->type);
