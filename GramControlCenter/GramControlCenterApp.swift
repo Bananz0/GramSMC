@@ -32,7 +32,7 @@ struct GramControlCenterApp: App {
     }
 }
 
-class AppDelegate: NSObject, NSApplicationDelegate {
+class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     var statusItem: NSStatusItem!
     var gramSMC: GramSMCController!
     var updateTimer: Timer?
@@ -148,7 +148,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let quitItem = NSMenuItem(title: "Quit", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         menu.addItem(quitItem)
         
+        menu.delegate = self
         statusItem.menu = menu
+    }
+    
+    // MARK: - NSMenuDelegate
+    
+    func menuWillOpen(_ menu: NSMenu) {
+        // Refresh values right before menu is displayed
+        gramSMC.refresh()
+        updateMenu()
     }
     
     // MARK: - Quick Actions
@@ -182,12 +191,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         if settingsWindow == nil {
             let contentView = SettingsView(controller: gramSMC)
             settingsWindow = NSWindow(
-                contentRect: NSRect(x: 0, y: 0, width: 500, height: 450),
-                styleMask: [.titled, .closable, .miniaturizable],
+                contentRect: NSRect(x: 0, y: 0, width: LGLayout.windowWidth, height: LGLayout.windowHeight),
+                styleMask: [.titled, .closable, .miniaturizable, .fullSizeContentView],
                 backing: .buffered,
                 defer: false
             )
             settingsWindow?.title = "LG Gram Control Center"
+            settingsWindow?.titlebarAppearsTransparent = true
+            settingsWindow?.isMovableByWindowBackground = true
+            settingsWindow?.backgroundColor = .clear // Important for VisualEffectView
             settingsWindow?.contentView = NSHostingView(rootView: contentView)
             settingsWindow?.center()
             settingsWindow?.isReleasedWhenClosed = false
@@ -205,250 +217,50 @@ struct SettingsView: View {
     @State private var refreshTimer: Timer?
     
     var body: some View {
-        VStack(spacing: 0) {
-            // Header
-            HStack {
-                if let headerIcon = NSImage(named: "titlebar_icon_control_center") {
-                    Image(nsImage: headerIcon)
-                        .resizable()
-                        .frame(width: 28, height: 28)
-                } else {
-                    Image(systemName: "laptopcomputer")
-                        .font(.system(size: 28))
-                        .foregroundColor(.accentColor)
-                }
-                Text("LG Gram Control Center")
-                    .font(.title2)
-                    .fontWeight(.semibold)
-                Spacer()
-                Circle()
-                    .fill(controller.isConnected ? Color.green : Color.red)
-                    .frame(width: 10, height: 10)
-                Text(controller.isConnected ? "Connected" : "Disconnected")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-            .padding()
-            .background(Color(NSColor.controlBackgroundColor))
+        ZStack {
+            // Native macOS Background Blur
+            VisualEffectBlur(material: .sidebar, blendingMode: .behindWindow)
+                .edgesIgnoringSafeArea(.all)
             
-            Divider()
-            
-            ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    
-                    // System Section
-                    SettingsSection(title: "System", icon: "icon_control_n") {
-                        // Fan Mode (replaces simple Silent Mode toggle)
-                        VStack(alignment: .leading, spacing: 8) {
-                            HStack {
-                                if let icon = NSImage(named: "icon_pan_n") {
-                                    Image(nsImage: icon)
-                                        .resizable()
-                                        .frame(width: 20, height: 20)
-                                } else {
-                                    Image(systemName: "fan")
-                                        .foregroundColor(.blue)
-                                }
-                                Text("Fan Mode")
-                                    .fontWeight(.medium)
-                                Spacer()
-                            }
-                            Text("Control fan behavior: Normal or Silent")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                            
-                            Picker("", selection: Binding(
-                                get: { Int(controller.fanMode) },
-                                set: { controller.setFanMode(UInt32($0)) }
-                            )) {
-                                Text("Normal").tag(0)
-                                Text("Silent").tag(1)
-                            }
-                            .pickerStyle(.segmented)
-                            .disabled(!controller.isConnected)
-                        }
-                        
-                        Divider()
-                        
-                        // Battery Care
-                        VStack(alignment: .leading, spacing: 8) {
-                            HStack {
-                                if let icon = NSImage(named: "icon_battery_normal_n") {
-                                    Image(nsImage: icon)
-                                        .resizable()
-                                        .frame(width: 20, height: 20)
-                                } else {
-                                    Image(systemName: "battery.75")
-                                        .foregroundColor(.green)
-                                }
-                                Text("Battery Care Limit")
-                                    .fontWeight(.medium)
-                                Spacer()
-                            }
-                            Text("Limit charging to extend battery lifespan")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                            
-                            Picker("", selection: Binding(
-                                get: { controller.batteryCareLimit },
-                                set: { controller.setBatteryCareLimit(UInt32($0)) }
-                            )) {
-                                Text("80% (Recommended)").tag(80)
-                                Text("100% (Full Charge)").tag(100)
-                            }
-                            .pickerStyle(.segmented)
-                            .disabled(!controller.isConnected)
-                        }
-                        
-                        Divider()
-                        
-                        // USB Charging
-                        ToggleRow(
-                            title: "USB Charging (Always On)",
-                            subtitle: "Charge devices via USB when laptop is off or sleeping",
-                            icon: "icon_usb_n",
-                            isOn: Binding(
-                                get: { controller.usbCharging },
-                                set: { controller.setUSBCharging($0) }
-                            ),
-                            isEnabled: controller.isConnected
-                        )
-                    }
-                    
-                    // Input Section
-                    SettingsSection(title: "Input", icon: "icon_KBD_high") {
-                        // Keyboard Backlight
-                        VStack(alignment: .leading, spacing: 8) {
-                            HStack {
-                                if let icon = NSImage(named: "icon_KBD_high") {
-                                    Image(nsImage: icon)
-                                        .resizable()
-                                        .frame(width: 20, height: 20)
-                                } else {
-                                    Image(systemName: "light.max")
-                                        .foregroundColor(.yellow)
-                                }
-                                Text("Keyboard Backlight")
-                                    .fontWeight(.medium)
-                                Spacer()
-                            }
-                            
-                            Picker("", selection: Binding(
-                                get: { controller.keyboardBacklight },
-                                set: { controller.setKeyboardBacklight(UInt32($0)) }
-                            )) {
-                                Text("Off").tag(0)
-                                Text("Low").tag(1)
-                                Text("High").tag(2)
-                            }
-                            .pickerStyle(.segmented)
-                            .disabled(!controller.isConnected)
-                        }
-                        
-                        Divider()
-                        
-                        // Fn Lock
-                        ToggleRow(
-                            title: "Fn Lock",
-                            subtitle: "Use F1-F12 keys directly without holding Fn",
-                            icon: "icon_hotkey_n",
-                            isOn: Binding(
-                                get: { controller.fnLock },
-                                set: { controller.setFnLock($0) }
-                            ),
-                            isEnabled: controller.isConnected
-                        )
-                    }
-                    
-                    // Display Section
-                    SettingsSection(title: "Display", icon: "icon_display_n") {
-                        ToggleRow(
-                            title: "Night Shift",
-                            subtitle: "Reduce blue light for comfortable reading (Fn+F9)",
-                            icon: "icon_display_Kelvin",
-                            isOn: Binding(
-                                get: { controller.nightShiftEnabled },
-                                set: { controller.setNightShift($0) }
-                            ),
-                            isEnabled: controller.nightShiftSupported
-                        )
-                    }
-                    
-                    // Status Section
-                    if controller.isConnected {
-                        SettingsSection(title: "Status", icon: "icon_info_normal") {
-                            HStack {
-                                StatusCard(
-                                    title: "CPU Temperature",
-                                    value: "\(controller.cpuTemp)°C",
-                                    icon: "thermometer.medium",
-                                    color: controller.cpuTemp > 70 ? .red : (controller.cpuTemp > 50 ? .orange : .green)
-                                )
-                                StatusCard(
-                                    title: "Fan Speed",
-                                    value: "\(controller.fanRPM) RPM",
-                                    icon: "icon_pan_n",
-                                    color: controller.fanRPM > 3000 ? .orange : .blue
-                                )
-                            }
-                        }
-                    }
-                    
-                    // About Section
-                    SettingsSection(title: "About", icon: "icon_info_normal") {
-                        HStack {
-                            Text("App Version")
-                            Spacer()
-                            Text(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "Unknown")
-                                .foregroundColor(.secondary)
-                        }
-                        
-                        Divider()
-                        
-                        HStack {
-                            Text("Kext Version")
-                            Spacer()
-                            Text(controller.kextVersion)
-                                .foregroundColor(.secondary)
-                        }
-                        
-                        Divider()
-                        
-                        HStack {
-                            Text("Daemon Version")
-                            Spacer()
-                            Text(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "Unknown")
-                                .foregroundColor(.secondary)
-                        }
-                    }
+            VStack(spacing: 0) {
+                // Spacer for Title Bar
+                Color.clear
+                    .frame(height: 38)
+                
+                // Main Content (flexible)
+                HStack(alignment: .top, spacing: LGLayout.gutter) {
+                    systemSettingsColumn
+                        .frame(maxWidth: .infinity)
+                    inputDisplayColumn
+                        .frame(maxWidth: .infinity)
                 }
-                .padding()
-            }
-            
-            // Footer
-            Divider()
-            HStack {
-                Text("GramSMC v\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0")")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                Spacer()
-                Button(action: {
-                    if let url = URL(string: "https://github.com/") {
-                        NSWorkspace.shared.open(url)
-                    }
-                }) {
-                    Text("Based on LG Control Center")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                .padding(LGLayout.padding)
+                
+                Spacer(minLength: 8)
+
+                // Footer with versions (fixed at bottom)
+                HStack(spacing: 16) {
+                    Text("App: \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0")")
+                        .font(LGFont.caption)
+                        .foregroundColor(LGColor.textSecondary)
+                    
+                    Text("Kext: \(controller.kextVersion)")
+                        .font(LGFont.caption)
+                        .foregroundColor(LGColor.textSecondary)
+                    
+                    Text("Daemon: 1.5.0")
+                        .font(LGFont.caption)
+                        .foregroundColor(LGColor.textSecondary)
+                    
+                    Spacer()
                 }
-                .buttonStyle(.plain)
+                .padding(.horizontal, LGLayout.padding)
+                .padding(.vertical, 8)
+                .background(Color(NSColor.windowBackgroundColor).opacity(0.5))
             }
-            .padding(.horizontal)
-            .padding(.vertical, 8)
         }
-        .frame(minWidth: 500, minHeight: 450)
+        .frame(width: LGLayout.windowWidth, height: LGLayout.windowHeight)
         .onAppear {
-            // Refresh data periodically
             refreshTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { _ in
                 controller.refresh()
             }
@@ -457,109 +269,129 @@ struct SettingsView: View {
             refreshTimer?.invalidate()
         }
     }
-}
-
-// MARK: - UI Components
-
-struct SettingsSection<Content: View>: View {
-    let title: String
-    let icon: String
-    let content: Content
     
-    init(title: String, icon: String, @ViewBuilder content: () -> Content) {
-        self.title = title
-        self.icon = icon
-        self.content = content()
-    }
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                if let customIcon = NSImage(named: icon) {
-                    Image(nsImage: customIcon)
-                        .resizable()
-                        .frame(width: 16, height: 16)
-                } else {
-                    Image(systemName: icon)
-                        .foregroundColor(.accentColor)
+    private var systemSettingsColumn: some View {
+        VStack(spacing: LGLayout.gutter) {
+            // Fan Mode Card
+            LGCard(title: "Fan Mode", icon: "icon_pan_n") {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Control fan behavior")
+                        .font(LGFont.caption)
+                        .foregroundColor(LGColor.textSecondary)
+                    
+                    LGSegmentedControl(
+                        options: [(0, "Normal"), (1, "Silent")],
+                        selection: Binding(
+                            get: { Int(controller.fanMode) },
+                            set: { controller.setFanMode(UInt32($0)) }
+                        ),
+                        isEnabled: controller.isConnected
+                    )
                 }
-                Text(title)
-                    .font(.headline)
             }
             
-            VStack(alignment: .leading, spacing: 12) {
-                content
+            // Battery Care Card
+            LGCard(title: "Battery Care", icon: "icon_battery_normal_n") {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Limit charging to extend battery lifespan")
+                        .font(LGFont.caption)
+                        .foregroundColor(LGColor.textSecondary)
+                    
+                    LGSegmentedControl(
+                        options: [(80, "80%"), (100, "100%")],
+                        selection: Binding(
+                            get: { controller.batteryCareLimit },
+                            set: { controller.setBatteryCareLimit(UInt32($0)) }
+                        ),
+                        isEnabled: controller.isConnected
+                    )
+                    
+                    Text("80% recommended for daily use")
+                        .font(LGFont.label)
+                        .foregroundColor(LGColor.textSecondary)
+                }
             }
-            .padding()
-            .background(Color(NSColor.controlBackgroundColor))
-            .cornerRadius(10)
+            
+            // USB Charging Card
+            LGCard(title: "USB Charging", icon: "icon_usb_n") {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Charge devices when laptop is off")
+                        .font(LGFont.caption)
+                        .foregroundColor(LGColor.textSecondary)
+                    
+                    Toggle(isOn: Binding(
+                        get: { controller.usbCharging },
+                        set: { controller.setUSBCharging($0) }
+                    )) {
+                        Text("Always On")
+                            .font(LGFont.body)
+                            .foregroundColor(LGColor.text)
+                    }
+                    .toggleStyle(LGToggleStyle(isEnabled: controller.isConnected))
+                    .disabled(!controller.isConnected)
+                }
+            }
         }
     }
-}
-
-struct ToggleRow: View {
-    let title: String
-    let subtitle: String
-    let icon: String
-    @Binding var isOn: Bool
-    let isEnabled: Bool
     
-    var body: some View {
-        HStack {
-            if let customIcon = NSImage(named: icon) {
-                Image(nsImage: customIcon)
-                    .resizable()
-                    .frame(width: 20, height: 20)
-            } else {
-                Image(systemName: icon)
-                    .foregroundColor(.accentColor)
+    private var inputDisplayColumn: some View {
+        VStack(spacing: LGLayout.gutter) {
+            // Keyboard Backlight Card
+            LGCard(title: "Keyboard Backlight", icon: "icon_KBD_high") {
+                VStack(alignment: .leading, spacing: 12) {
+                    LGSegmentedControl(
+                        options: [(0, "Off"), (1, "Low"), (2, "High")],
+                        selection: Binding(
+                            get: { controller.keyboardBacklight },
+                            set: { controller.setKeyboardBacklight(UInt32($0)) }
+                        ),
+                        isEnabled: controller.isConnected
+                    )
+                }
             }
-            VStack(alignment: .leading) {
-                Text(title)
-                    .fontWeight(.medium)
-                Text(subtitle)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+            
+            // Fn Lock Card
+            LGCard(title: "Fn Lock", icon: "icon_hotkey_n") {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Use F1-F12 directly without Fn key")
+                        .font(LGFont.caption)
+                        .foregroundColor(LGColor.textSecondary)
+                    
+                    Toggle(isOn: Binding(
+                        get: { controller.fnLock },
+                        set: { controller.setFnLock($0) }
+                    )) {
+                        Text("Enabled")
+                            .font(LGFont.body)
+                            .foregroundColor(LGColor.text)
+                    }
+                    .toggleStyle(LGToggleStyle(isEnabled: controller.isConnected))
+                    .disabled(!controller.isConnected)
+                }
             }
-            Spacer()
-            Toggle("", isOn: $isOn)
-                .toggleStyle(.switch)
-                .disabled(!isEnabled)
+            
+            // Night Shift Card
+            LGCard(title: "Reader Mode", icon: "icon_display_Kelvin") {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Reduce blue light (Fn+F9)")
+                        .font(LGFont.caption)
+                        .foregroundColor(LGColor.textSecondary)
+                    
+                    Toggle(isOn: Binding(
+                        get: { controller.nightShiftEnabled },
+                        set: { controller.setNightShift($0) }
+                    )) {
+                        Text("Night Shift")
+                            .font(LGFont.body)
+                            .foregroundColor(LGColor.text)
+                    }
+                    .toggleStyle(LGToggleStyle(isEnabled: controller.nightShiftSupported))
+                    .disabled(!controller.nightShiftSupported)
+                }
+            }
         }
     }
-}
-
-struct StatusCard: View {
-    let title: String
-    let value: String
-    let icon: String
-    let color: Color
-    
-    var body: some View {
-        VStack(spacing: 8) {
-            if let customIcon = NSImage(named: icon) {
-                Image(nsImage: customIcon)
-                    .resizable()
-                    .frame(width: 24, height: 24)
-                    .foregroundColor(color)
-            } else {
-                Image(systemName: icon)
-                    .font(.title2)
-                    .foregroundColor(color)
-            }
-            Text(value)
-                .font(.title3)
-                .fontWeight(.semibold)
-            Text(title)
-                .font(.caption)
-                .foregroundColor(.secondary)
         }
-        .frame(maxWidth: .infinity)
-        .padding()
-        .background(Color(NSColor.controlBackgroundColor))
-        .cornerRadius(8)
-    }
-}
 
 // MARK: - GramSMC IOKit Controller
 
@@ -580,6 +412,15 @@ class GramSMCController: ObservableObject {
     
     // Night Shift client (private CoreBrightness API)
     private var blueLightClient: CBBlueLightClient?
+    
+    // UserDefaults Keys
+    private enum SettingsKey: String {
+        case keyboardBacklight = "GramSMC_KeyboardBacklight"
+        case fanMode = "GramSMC_FanMode"
+        case batteryCareLimit = "GramSMC_BatteryCareLimit"
+        case usbCharging = "GramSMC_USBCharging"
+        case fnLock = "GramSMC_FnLock"
+    }
     
     // Computed property for fan mode string
     var fanModeString: String {
@@ -602,6 +443,60 @@ class GramSMCController: ObservableObject {
         
         connect()
         refresh()
+        
+        // Load saved settings and apply to hardware
+        loadSettings()
+    }
+    
+    // MARK: - Settings Persistence
+    
+    func saveSettings() {
+        let defaults = UserDefaults.standard
+        defaults.set(keyboardBacklight, forKey: SettingsKey.keyboardBacklight.rawValue)
+        defaults.set(fanMode, forKey: SettingsKey.fanMode.rawValue)
+        defaults.set(batteryCareLimit, forKey: SettingsKey.batteryCareLimit.rawValue)
+        defaults.set(usbCharging, forKey: SettingsKey.usbCharging.rawValue)
+        defaults.set(fnLock, forKey: SettingsKey.fnLock.rawValue)
+    }
+    
+    func loadSettings() {
+        let defaults = UserDefaults.standard
+        
+        // Only load and apply if we have saved values (check if key exists)
+        if defaults.object(forKey: SettingsKey.keyboardBacklight.rawValue) != nil {
+            let savedKbl = defaults.integer(forKey: SettingsKey.keyboardBacklight.rawValue)
+            if savedKbl != keyboardBacklight {
+                setKeyboardBacklight(UInt32(savedKbl))
+            }
+        }
+        
+        if defaults.object(forKey: SettingsKey.fanMode.rawValue) != nil {
+            let savedFanMode = UInt32(defaults.integer(forKey: SettingsKey.fanMode.rawValue))
+            if savedFanMode != fanMode {
+                setFanMode(savedFanMode)
+            }
+        }
+        
+        if defaults.object(forKey: SettingsKey.batteryCareLimit.rawValue) != nil {
+            let savedBatteryLimit = defaults.integer(forKey: SettingsKey.batteryCareLimit.rawValue)
+            if savedBatteryLimit != batteryCareLimit && (savedBatteryLimit == 80 || savedBatteryLimit == 100) {
+                setBatteryCareLimit(UInt32(savedBatteryLimit))
+            }
+        }
+        
+        if defaults.object(forKey: SettingsKey.usbCharging.rawValue) != nil {
+            let savedUSB = defaults.bool(forKey: SettingsKey.usbCharging.rawValue)
+            if savedUSB != usbCharging {
+                setUSBCharging(savedUSB)
+            }
+        }
+        
+        if defaults.object(forKey: SettingsKey.fnLock.rawValue) != nil {
+            let savedFnLock = defaults.bool(forKey: SettingsKey.fnLock.rawValue)
+            if savedFnLock != fnLock {
+                setFnLock(savedFnLock)
+            }
+        }
     }
     
     deinit {
@@ -788,6 +683,7 @@ class GramSMCController: ObservableObject {
         guard service != 0 else { return }
         keyboardBacklight = Int(level)
         setProperty("KeyboardBacklight", value: level)
+        saveSettings()
     }
     
     func setSilentMode(_ enabled: Bool) {
@@ -800,6 +696,7 @@ class GramSMCController: ObservableObject {
         guard service != 0 else { return }
         fanMode = mode
         setProperty("FanMode", value: mode)
+        saveSettings()
     }
     
     // Computed property for backwards compatibility
@@ -812,18 +709,21 @@ class GramSMCController: ObservableObject {
         guard service != 0 else { return }
         batteryCareLimit = Int(limit)
         setProperty("BatteryCareLimit", value: limit)
+        saveSettings()
     }
     
     func setUSBCharging(_ enabled: Bool) {
         guard service != 0 else { return }
         usbCharging = enabled
         setProperty("USBCharging", value: enabled ? 1 : 0)
+        saveSettings()
     }
     
     func setFnLock(_ enabled: Bool) {
         guard service != 0 else { return }
         fnLock = enabled
         setProperty("FnLock", value: enabled ? 1 : 0)
+        saveSettings()
     }
     
     private func setProperty(_ name: String, value: UInt32) {
