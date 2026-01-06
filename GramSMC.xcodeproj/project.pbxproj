@@ -571,7 +571,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "#!/bin/bash\nset -euo pipefail\n\n# Colors\nRED='\\033[0;31m'\nGREEN='\\033[0;32m'\nBLUE='\\033[0;34m'\nYELLOW='\\033[1;33m'\nNC='\\033[0m'\n\nBUILD_DIR=\"${SRCROOT}/build/${CONFIGURATION}\"\nKEXT_SRC=\"${BUILT_PRODUCTS_DIR}/GramSMC.kext\"\nAPP_SRC=\"${BUILT_PRODUCTS_DIR}/GramControlCenter.app\"\nDAEMON_SRC=\"${BUILT_PRODUCTS_DIR}/GramSMCDaemon\"\nPLIST_SRC=\"${SRCROOT}/GramSMCDaemon/com.bananz0.GramSMCDaemon.plist\"\nINSTALL_SCRIPT_SRC=\"${SRCROOT}/Scripts/install_daemon_app.sh\"\n\necho -e \"${BLUE}[BUILD] Collecting products to ${BUILD_DIR}...${NC}\"\n\n# Create build directory\nmkdir -p \"${BUILD_DIR}\"\n\n# Copy kext\nif [ -d \"${KEXT_SRC}\" ]; then\n  rm -rf \"${BUILD_DIR}/GramSMC.kext\"\n  cp -R \"${KEXT_SRC}\" \"${BUILD_DIR}/\"\n  echo -e \"${GREEN}✓ Copied GramSMC.kext${NC}\"\nelse\n  echo -e \"${YELLOW}⚠ GramSMC.kext not found${NC}\"\nfi\n\n# Copy app\nif [ -d \"${APP_SRC}\" ]; then\n  rm -rf \"${BUILD_DIR}/GramControlCenter.app\"\n  cp -R \"${APP_SRC}\" \"${BUILD_DIR}/\"\n  echo -e \"${GREEN}✓ Copied GramControlCenter.app${NC}\"\nelse\n  echo -e \"${YELLOW}⚠ GramControlCenter.app not found${NC}\"\nfi\n\n# Copy daemon\nif [ -f \"${DAEMON_SRC}\" ]; then\n  cp \"${DAEMON_SRC}\" \"${BUILD_DIR}/\"\n  echo -e \"${GREEN}✓ Copied GramSMCDaemon${NC}\"\nelse\n  echo -e \"${YELLOW}⚠ GramSMCDaemon not found${NC}\"\nfi\n\n# Copy daemon plist\nif [ -f \"${PLIST_SRC}\" ]; then\n  cp \"${PLIST_SRC}\" \"${BUILD_DIR}/\"\n  echo -e \"${GREEN}✓ Copied daemon plist${NC}\"\nfi\n\n# Copy install script\nif [ -f \"${INSTALL_SCRIPT_SRC}\" ]; then\n  cp \"${INSTALL_SCRIPT_SRC}\" \"${BUILD_DIR}/install.sh\"\n  chmod +x \"${BUILD_DIR}/install.sh\"\n  echo -e \"${GREEN}✓ Copied install script${NC}\"\nfi\n\n# SSDT already compiled in previous phase\nif [ -f \"${BUILD_DIR}/SSDT-GramSMC.aml\" ]; then\n  echo -e \"${GREEN}✓ SSDT-GramSMC.aml ready${NC}\"\nfi\n\necho -e \"${GREEN}\\n✓ Build complete: ${BUILD_DIR}${NC}\"\necho -e \"${BLUE}Contents:${NC}\"\nls -lh \"${BUILD_DIR}\" | tail -n +2\n\necho -e \"${YELLOW}\\nTo install daemon and app:${NC}\"\necho -e \"  cd ${BUILD_DIR} && ./install.sh\"\n";
+			shellScript = "#!/bin/bash\nset -euo pipefail\n\n# Colors\nRED='\\033[0;31m'\nGREEN='\\033[0;32m'\nBLUE='\\033[0;34m'\nYELLOW='\\033[1;33m'\nNC='\\033[0m'\n\nBUILD_DIR=\"${SRCROOT}/build/${CONFIGURATION}\"\nKEXT_SRC=\"${BUILT_PRODUCTS_DIR}/GramSMC.kext\"\nAPP_SRC=\"${BUILT_PRODUCTS_DIR}/GramControlCenter.app\"\nDAEMON_SRC=\"${BUILT_PRODUCTS_DIR}/GramSMCDaemon\"\nPLIST_SRC=\"${SRCROOT}/GramSMCDaemon/com.bananz0.GramSMCDaemon.plist\"\nAPP_PLIST_SRC=\"${SRCROOT}/GramControlCenter/com.bananz0.GramControlCenter.plist\"\nINSTALL_SCRIPT_SRC=\"${SRCROOT}/Scripts/install_daemon_app.sh\"\n\necho -e \"${BLUE}[BUILD] Collecting products to ${BUILD_DIR}...${NC}\"\n\n# Clean build directory\nrm -rf \"${BUILD_DIR}\"\nmkdir -p \"${BUILD_DIR}\"\n\n# Copy kext\nif [ -d \"${KEXT_SRC}\" ]; then\n  rm -rf \"${BUILD_DIR}/GramSMC.kext\"\n  cp -R \"${KEXT_SRC}\" \"${BUILD_DIR}/\"\n  echo -e \"${GREEN}✓ Copied GramSMC.kext${NC}\"\nelse\n  echo -e \"${YELLOW}⚠ GramSMC.kext not found${NC}\"\nfi\n\n# Copy app\nif [ -d \"${APP_SRC}\" ]; then\n  rm -rf \"${BUILD_DIR}/GramControlCenter.app\"\n  cp -R \"${APP_SRC}\" \"${BUILD_DIR}/\"\n  echo -e \"${GREEN}✓ Copied GramControlCenter.app${NC}\"\nelse\n  echo -e \"${YELLOW}⚠ GramControlCenter.app not found${NC}\"\nfi\n\n# Copy daemon\nif [ -f \"${DAEMON_SRC}\" ]; then\n  cp \"${DAEMON_SRC}\" \"${BUILD_DIR}/\"\n  echo -e \"${GREEN}✓ Copied GramSMCDaemon${NC}\"\nelse\n  echo -e \"${YELLOW}⚠ GramSMCDaemon not found${NC}\"\nfi\n\n# Copy daemon plist\nif [ -f \"${PLIST_SRC}\" ]; then\n  cp \"${PLIST_SRC}\" \"${BUILD_DIR}/\"\n  echo -e \"${GREEN}✓ Copied daemon plist${NC}\"\nfi\n\n# Copy app agent plist\nif [ -f \"${APP_PLIST_SRC}\" ]; then\n  cp \"${APP_PLIST_SRC}\" \"${BUILD_DIR}/\"\n  echo -e \"${GREEN}✓ Copied app agent plist${NC}\"\nfi\n\n# Copy install script\nif [ -f \"${INSTALL_SCRIPT_SRC}\" ]; then\n  cp \"${INSTALL_SCRIPT_SRC}\" \"${BUILD_DIR}/install.sh\"\n  chmod +x \"${BUILD_DIR}/install.sh\"\n  echo -e \"${GREEN}✓ Copied install script${NC}\"\nfi\n\n# SSDT already compiled in previous phase\nif [ -f \"${BUILD_DIR}/SSDT-GramSMC.aml\" ]; then\n  echo -e \"${GREEN}✓ SSDT-GramSMC.aml ready${NC}\"\nfi\n\necho -e \"${GREEN}\\n✓ Build complete: ${BUILD_DIR}${NC}\"\necho -e \"${BLUE}Contents:${NC}\"\nls -lh \"${BUILD_DIR}\" | tail -n +2\n\necho -e \"${YELLOW}\\nTo install daemon and app:${NC}\"\necho -e \"  cd ${BUILD_DIR} && ./install.sh\"\n";
 		};
 		4C8C666424460F3C00D694EB /* Archive */ = {
 			isa = PBXShellScriptBuildPhase;
@@ -681,7 +681,7 @@
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1.5.0;
 				DEAD_CODE_STRIPPING = YES;
-				ENABLE_APP_SANDBOX = YES;
+				ENABLE_APP_SANDBOX = NO;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
@@ -725,7 +725,7 @@
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1.5.0;
 				DEAD_CODE_STRIPPING = YES;
-				ENABLE_APP_SANDBOX = YES;
+				ENABLE_APP_SANDBOX = NO;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;

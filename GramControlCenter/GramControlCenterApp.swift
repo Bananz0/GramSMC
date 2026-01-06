@@ -18,6 +18,7 @@
 import SwiftUI
 import IOKit
 import Combine
+import UserNotifications
 
 @main
 struct GramControlCenterApp: App {
@@ -65,6 +66,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         updateTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
             self?.gramSMC.refresh()
             self?.updateMenu()
+        }
+        
+        // Request notification permission
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { granted, error in
+            if let error = error {
+                print("Notification permission error: \(error.localizedDescription)")
+            }
         }
     }
     
@@ -409,7 +417,7 @@ struct SettingsView: View {
                         HStack {
                             Text("Daemon Version")
                             Spacer()
-                            Text("2.0.0")
+                            Text(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "Unknown")
                                 .foregroundColor(.secondary)
                         }
                     }
@@ -420,7 +428,7 @@ struct SettingsView: View {
             // Footer
             Divider()
             HStack {
-                Text("GramSMC v2.0.0")
+                Text("GramSMC v\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0")")
                     .font(.caption)
                     .foregroundColor(.secondary)
                 Spacer()
@@ -568,6 +576,7 @@ class GramSMCController: ObservableObject {
     @Published var kextVersion: String = "Unknown"
     @Published var nightShiftEnabled: Bool = false
     @Published var nightShiftSupported: Bool = false
+    @Published var readerMode: Bool = false
     
     // Night Shift client (private CoreBrightness API)
     private var blueLightClient: CBBlueLightClient?
@@ -582,6 +591,8 @@ class GramSMCController: ObservableObject {
     }
     
     private var service: io_service_t = 0
+    private var notificationPort: IONotificationPortRef?
+    private var notificationObject: io_object_t = 0
     
     init() {
         // Initialize Night Shift client
@@ -594,28 +605,126 @@ class GramSMCController: ObservableObject {
     }
     
     deinit {
+        if notificationObject != 0 {
+            IOObjectRelease(notificationObject)
+        }
+        if let port = notificationPort {
+            IONotificationPortDestroy(port)
+        }
         if service != 0 {
             IOObjectRelease(service)
         }
     }
     
     func connect() {
-        if service != 0 {
-            IOObjectRelease(service)
-            service = 0
-        }
-        
         let matching = IOServiceMatching("GramSMC")
         service = IOServiceGetMatchingService(kIOMainPortDefault, matching)
         
-        if service == 0 {
-            print("GramSMC service not found")
-            isConnected = false
-        } else {
-            print("GramSMC connected")
+        if service != 0 {
             isConnected = true
+            setupNotifications()
+            // Read version
+            // Read version
+            if let version = getStringProperty("Version") {
+                kextVersion = version
+            }
+        } else {
+            isConnected = false
         }
     }
+    
+    func setupNotifications() {
+        // Create notification port
+        notificationPort = IONotificationPortCreate(kIOMainPortDefault)
+        guard let port = notificationPort else { return }
+        
+        // Add to RunLoop
+        let runLoopSource = IONotificationPortGetRunLoopSource(port)
+        CFRunLoopAddSource(CFRunLoopGetMain(), runLoopSource!.takeUnretainedValue(), .defaultMode)
+        
+        // Register for general interest (messages from kext)
+        // Pass 'self' as refCon
+        let refCon = Unmanaged.passUnretained(self).toOpaque()
+        
+        let req = IOServiceAddInterestNotification(
+            port,
+            service,
+            kIOGeneralInterest,
+            gramSMCNotificationCallback,
+            refCon,
+            &notificationObject
+        )
+        
+        if req != KERN_SUCCESS {
+            print("Failed to register for notifications")
+        }
+    }
+    
+    func refreshReaderMode() {
+        readerMode = getBoolProperty("ReaderMode")
+    }
+    
+    func handleEvent(code: UInt32) {
+        print("Received Event: 0x\(String(format: "%02X", code))")
+        
+        switch code {
+        case 0x10: // Brightness Down (Native+App)
+            // Just update UI state, do not set back to hardware
+            if keyboardBacklight > 0 { keyboardBacklight -= 1 }
+            showOSD(title: "Keyboard Brightness", level: keyboardBacklight, max: 2)
+            
+        case 0x11: // Brightness Up (Native+App)
+             // Just update UI state
+            if keyboardBacklight < 2 { keyboardBacklight += 1 }
+            showOSD(title: "Keyboard Brightness", level: keyboardBacklight, max: 2)
+            
+        case 0xC0: keyboardBacklight = 0 // Off
+        case 0xC1: keyboardBacklight = 1 // Low
+        case 0xC2: keyboardBacklight = 2 // High
+            
+        case 0x369: // Touchpad Toggle (Native code passed through) or 0xE4
+             // Just generic OSD or notification
+             showNotification(title: "Touchpad", message: "Toggled")
+             
+        case 0xE4: // Legacy Touchpad code
+             showNotification(title: "Touchpad", message: "Toggled")
+
+        case 0x7D: // Airplane Mode
+             showNotification(title: "Airplane Mode", message: "Toggled")
+             
+        // Reader Mode
+        case 0xF9, 0x69:
+             refreshReaderMode() // Poll state
+             setNightShift(!nightShiftEnabled) // Toggle Night Shift
+             showNotification(title: "Reader Mode", message: "Toggled - Night Shift \(nightShiftEnabled ? "On" : "Off")")
+
+        default:
+            // Refresh generic state for other keys
+            refresh()
+        }
+    }
+    
+    func showOSD(title: String, level: Int, max: Int) {
+        // Simple OSD implementation or placeholder
+        // Using built-in macOS OSD is hard without private APIs, so we use a Notification for now
+        // or rely on the Menu Bar icon updating.
+        // Ideally we would show a HUD window here.
+    }
+    
+    func showNotification(title: String, message: String) {
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.body = message
+        
+        let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
+        UNUserNotificationCenter.current().add(request) { error in
+            if let error = error {
+                print("Error showing notification: \(error.localizedDescription)")
+            }
+        }
+    }
+
+
     
     func refresh() {
         if !isConnected {
@@ -641,6 +750,8 @@ class GramSMCController: ObservableObject {
         }
     }
     
+
+
     func getProperty(_ name: String) -> UInt32? {
         guard service != 0 else { return nil }
         if let prop = IORegistryEntryCreateCFProperty(service, name as CFString, kCFAllocatorDefault, 0) {
@@ -739,5 +850,19 @@ class GramSMCController: ObservableObject {
     
     func toggleNightShift() {
         setNightShift(!nightShiftEnabled)
+    }
+}
+
+// Global C-function callback for IOService
+func gramSMCNotificationCallback(refCon: UnsafeMutableRawPointer?, service: io_service_t, messageType: UInt32, messageArgument: UnsafeMutableRawPointer?) {
+    guard let refCon = refCon else { return }
+    let controller = Unmanaged<GramSMCController>.fromOpaque(refCon).takeUnretainedValue()
+    
+    // In our Kext, we pass the Event Code as 'messageType'
+    // messageArgument is unused (0)
+    let eventCode = messageType
+    
+    DispatchQueue.main.async {
+        controller.handleEvent(code: eventCode)
     }
 }

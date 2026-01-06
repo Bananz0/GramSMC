@@ -535,13 +535,13 @@ bool GramSMC::refreshFan() {
 void GramSMC::refreshECStates() {
   // Refresh all EC-controlled states and update properties
   // This ensures the App stays in sync with hardware changes
-  
+
   // Keyboard Backlight
   if (hasKeyboardBacklight) {
     uint32_t kbl = getKeyboardBacklight();
     setProperty("KeyboardBacklight", kbl, 32);
   }
-  
+
   // Fan Mode (Silent Mode)
   if (capabilities & kCapFanMode) {
     uint32_t mode = getFanMode();
@@ -551,7 +551,7 @@ void GramSMC::refreshECStates() {
       DBGLOG("gram", "refreshECStates: FanMode changed to %u", mode);
     }
   }
-  
+
   // Battery Care Limit
   if (capabilities & kCapBatteryCare) {
     uint32_t limit = getBatteryCareLimit();
@@ -561,33 +561,36 @@ void GramSMC::refreshECStates() {
       DBGLOG("gram", "refreshECStates: BatteryCareLimit changed to %u", limit);
     }
   }
-  
+
   // USB Charging
   if (capabilities & kCapUSBCharging) {
     bool usb = getUSBCharging();
     if (usb != currentUSBCharging) {
       currentUSBCharging = usb;
       setProperty("USBCharging", usb);
-      DBGLOG("gram", "refreshECStates: USBCharging changed to %s", usb ? "true" : "false");
+      DBGLOG("gram", "refreshECStates: USBCharging changed to %s",
+             usb ? "true" : "false");
     }
   }
-  
+
   // Fn Lock
   if (capabilities & kCapFnLock) {
     bool fnl = getFnLock();
     if (fnl != currentFnLock) {
       currentFnLock = fnl;
       setProperty("FnLock", fnl);
-      DBGLOG("gram", "refreshECStates: FnLock changed to %s", fnl ? "true" : "false");
+      DBGLOG("gram", "refreshECStates: FnLock changed to %s",
+             fnl ? "true" : "false");
     }
   }
-  
+
   // CPU Temperature & Fan RPM (always refresh)
   uint32_t temp = 0;
-  if (gramDevice && gramDevice->evaluateInteger("GTMP", &temp) == kIOReturnSuccess) {
+  if (gramDevice &&
+      gramDevice->evaluateInteger("GTMP", &temp) == kIOReturnSuccess) {
     setProperty("CPUTemp", temp, 32);
   }
-  
+
   if (isTACHAvailable) {
     refreshFan();
     setProperty("FanRPM", (uint32_t)atomic_load(&currentFanSpeed), 32);
@@ -647,7 +650,8 @@ void GramSMC::setFanMode(uint32_t mode) {
 }
 
 void GramSMC::cycleFanMode() {
-  uint32_t newMode = (getFanMode() + 1) % 2;  // Only 2 modes: Normal (0) and Silent (1)
+  uint32_t newMode =
+      (getFanMode() + 1) % 2; // Only 2 modes: Normal (0) and Silent (1)
   setFanMode(newMode);
   kev.sendMessage(kDaemonFanMode, newMode, 0);
 }
@@ -747,6 +751,10 @@ void GramSMC::setFnLock(bool enabled) {
 // ============================================
 
 void GramSMC::handleMessage(int code) {
+  // Broadcast event to user clients (App/Debug Tool)
+  // Use the event code as the 'messageType' directly
+  messageClients((uint32_t)code);
+
   switch (code) {
   // LG Gram specific event codes from SSDT-GramSMC
   case GRAM_EVENT_BRIGHTNESS_DOWN: // 0x10
@@ -872,8 +880,9 @@ void GramSMC::handleMessage(int code) {
     break;
   }
 
-  // After handling any event, refresh all EC states to catch any hardware changes
-  // This ensures Fn Lock, Silent Mode, etc. are synced even if no specific event exists
+  // After handling any event, refresh all EC states to catch any hardware
+  // changes This ensures Fn Lock, Silent Mode, etc. are synced even if no
+  // specific event exists
   refreshECStates();
 
   DBGLOG("gram", "Received key %d(0x%x)", code, code);

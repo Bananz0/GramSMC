@@ -62,15 +62,25 @@ DefinitionBlock ("", "SSDT", 2, "GRAM", "GramSMC", 0x00002000)
     External (_SB_.PCI0.LPCB.H_EC.ECAV, IntObj)
     External (_SB_.PCI0.LPCB.H_EC.ECRX, MethodObj)    // 1 Arg - Read EC byte by offset
     External (_SB_.PCI0.LPCB.H_EC.ECWX, MethodObj)    // 2 Args - Write EC byte by offset
+    External (_SB_.PCI0.LPCB.PS2K, DeviceObj)         // Keyboard Device for native shortcuts
     External (ECON, IntObj)                            // EC ready flag
     
     // External references for renamed EC query methods (if patching Fn keys)
-    // Brightness keys - COMMENTED OUT per user request (let graphics driver handle)
-    // External (_SB_.PCI0.LPCB.H_EC.XQ50, MethodObj)  // Brightness Down
-    // External (_SB_.PCI0.LPCB.H_EC.XQ51, MethodObj)  // Brightness Up
+    External (_SB_.PCI0.LPCB.H_EC.XQ50, MethodObj)     // Brightness Down
+    External (_SB_.PCI0.LPCB.H_EC.XQ51, MethodObj)     // Brightness Up
     External (_SB_.PCI0.LPCB.H_EC.XQ64, MethodObj)     // Keyboard Backlight / F8
     External (_SB_.PCI0.LPCB.H_EC.XQ34, MethodObj)     // Sleep
-    External (_SB_.PCI0.LPCB.H_EC.XQ36, MethodObj)     // Fn key events
+    External (_SB_.PCI0.LPCB.H_EC.XQ36, MethodObj)     // Airplane Mode
+    External (_SB_.PCI0.LPCB.H_EC.XQ30, MethodObj)     // Fn+F1 (LG App)
+    External (_SB_.PCI0.LPCB.H_EC.XQ37, MethodObj)     // Fn+F4 (Display)
+    External (_SB_.PCI0.LPCB.H_EC.XQ69, MethodObj)     // Fn+F9?
+    External (_SB_.PCI0.LPCB.H_EC.XQ6A, MethodObj)     // Fn+F10?
+    External (_SB_.PCI0.LPCB.H_EC.XQ6B, MethodObj)     // Fn+F11?
+    External (_SB_.PCI0.LPCB.H_EC.XQ72, MethodObj)     // ?
+    External (_SB_.PCI0.LPCB.H_EC.XQ7B, MethodObj)     // ?
+    External (_SB_.PCI0.LPCB.H_EC.XQ7C, MethodObj)     // ?
+    External (_SB_.PCI0.LPCB.H_EC.XQ52, MethodObj)     // Volume Down
+    External (_SB_.PCI0.LPCB.H_EC.XQ53, MethodObj)     // Volume Up
 
     // GramSMC Device - Interface for macOS kext
     Scope (_SB)
@@ -79,7 +89,7 @@ DefinitionBlock ("", "SSDT", 2, "GRAM", "GramSMC", 0x00002000)
         {
             Name (_HID, "GRAM0001")  // Hardware ID for kext matching
             Name (_CID, "GRAM0001")  // Compatible ID
-            Name (_UID, One)
+            Name (_UID, "GRAM")
             
             // Event buffer for kext communication
             Name (EVTB, Zero)  // Event buffer
@@ -387,7 +397,7 @@ DefinitionBlock ("", "SSDT", 2, "GRAM", "GramSMC", 0x00002000)
                 {
                     Return (\_SB.PCI0.LPCB.H_EC.ECRX (0xC8))
                 }
-                Return (0x32)  // Default 50°C
+                Return (0x32)  // Default 50Â°C
             }
             
             // GFAN - Get Fan Speed (approximate RPM)
@@ -456,17 +466,58 @@ DefinitionBlock ("", "SSDT", 2, "GRAM", "GramSMC", 0x00002000)
     
     Scope (\_SB.PCI0.LPCB.H_EC)
     {
-        // Keyboard Backlight Key (Fn+F8)
-        // Note: F8 may trigger mute on some systems; we cycle backlight instead
+        // Brightness Down (Fn+F2)
+        // Requires patch: _Q51 -> XQ51
+        Method (_Q51, 0, NotSerialized)
+        {
+            If (_OSI ("Darwin"))
+            {
+                // Native Brightness Down via VoodooPS2
+                Notify (\_SB.PCI0.LPCB.PS2K, 0x0405)
+                // Also notify GramSMC App
+                \_SB.GRAM.NEVT (0x10) 
+            }
+            Else
+            {
+                // Windows: Call original method
+                If (CondRefOf (XQ51))
+                {
+                    XQ51 ()
+                }
+            }
+        }
+
+        // Brightness Up (Fn+F3)
+        // Requires patch: _Q50 -> XQ50
+        Method (_Q50, 0, NotSerialized)
+        {
+            If (_OSI ("Darwin"))
+            {
+                // Native Brightness Up via VoodooPS2
+                Notify (\_SB.PCI0.LPCB.PS2K, 0x0406)
+                // Also notify GramSMC App
+                \_SB.GRAM.NEVT (0x11)
+            }
+            Else
+            {
+                // Windows: Call original method
+                If (CondRefOf (XQ50))
+                {
+                    XQ50 ()
+                }
+            }
+        }
+
+        // Fn + Caps Lock 
         // Requires patch: _Q64 -> XQ64
         Method (_Q64, 0, NotSerialized)
         {
             If (_OSI ("Darwin"))
             {
                 // macOS: Cycle keyboard backlight and notify app
-                Local0 = \_SB.GRAM.CKBL ()
+                //Local0 = \_SB.GRAM.CKBL ()
                 // Notify with backlight level (0xC0 + level)
-                \_SB.GRAM.NEVT ((0xC0 + Local0))
+                //\_SB.GRAM.NEVT ((0xC0 + Local0))
             }
             Else
             {
@@ -478,7 +529,7 @@ DefinitionBlock ("", "SSDT", 2, "GRAM", "GramSMC", 0x00002000)
             }
         }
         
-        // Sleep Button (Fn+F12 or Power)
+        // Sleep Button    
         // Requires patch: _Q34 -> XQ34
         Method (_Q34, 0, NotSerialized)
         {
@@ -486,6 +537,8 @@ DefinitionBlock ("", "SSDT", 2, "GRAM", "GramSMC", 0x00002000)
             {
                 // macOS: Notify GramSMC of sleep event
                 \_SB.GRAM.NEVT (0x5E)
+                // Pass-through native sleep behavior (Notify SLPB)
+                If (CondRefOf (XQ34)) { XQ34 () }
             }
             Else
             {
@@ -497,23 +550,169 @@ DefinitionBlock ("", "SSDT", 2, "GRAM", "GramSMC", 0x00002000)
             }
         }
         
-        // Function Key Event (Fn key combinations)
+        // Airplane Mode Key (Fn+F6)
         // Requires patch: _Q36 -> XQ36
         Method (_Q36, 0, NotSerialized)
         {
             If (_OSI ("Darwin"))
             {
-                // macOS: Get function key code and notify GramSMC
-                Local0 = \_SB.PCI0.LPCB.H_EC.ECRX (0xE4)
-                \_SB.GRAM.NEVT (Local0)
+                Notify (\_SB.PCI0.LPCB.PS2K, 0x0369)
+                // Notify GramSMC App (Airplane Mode = 0x7D)
+                \_SB.GRAM.NEVT (0x7D)
             }
             Else
             {
-                // Windows: Call original method
-                If (CondRefOf (XQ36))
-                {
-                    XQ36 ()
-                }
+                If (CondRefOf (XQ36)) { XQ36 () }
+            }
+        }
+
+        // Keyboard Backlight Key
+        // Requires patch: _Q30 -> XQ30
+        Method (_Q30, 0, NotSerialized)
+        {
+            If (_OSI ("Darwin"))
+            {
+                // \_SB.GRAM.NEVT (0x30) FIX: Launches LG Control Center
+                // macOS: Cycle keyboard backlight and notify app
+                Local0 = \_SB.GRAM.CKBL ()
+                // Notify with backlight level (0xC0 + level)
+                \_SB.GRAM.NEVT ((0xC0 + Local0))
+                If (CondRefOf (XQ30)) { XQ30 () }
+            }
+            Else
+            {
+                If (CondRefOf (XQ30)) { XQ30 () }
+            }
+        }
+
+        // Display Mode (Fn+F4)
+        // Requires patch: _Q37 -> XQ37
+        Method (_Q37, 0, NotSerialized)
+        {
+            If (_OSI ("Darwin"))
+            {
+                \_SB.GRAM.NEVT (0x37)
+                If (CondRefOf (XQ37)) { XQ37 () }
+            }
+            Else
+            {
+                If (CondRefOf (XQ37)) { XQ37 () }
+            }
+        }
+
+        // Reader Mode / Other (Fn+F9?)
+        // Requires patch: _Q69 -> XQ69
+        Method (_Q69, 0, NotSerialized)
+        {
+            If (_OSI ("Darwin"))
+            {
+                \_SB.GRAM.NEVT (0x69)
+                If (CondRefOf (XQ69)) { XQ69 () }
+            }
+            Else
+            {
+                If (CondRefOf (XQ69)) { XQ69 () }
+            }
+        }
+
+        // Mute / Vol - / Vol + (Check mapping)
+        // Requires patch: _Q6A -> XQ6A
+        Method (_Q6A, 0, NotSerialized)
+        {
+            If (_OSI ("Darwin"))
+            {
+                \_SB.GRAM.NEVT (0x6A)
+                If (CondRefOf (XQ6A)) { XQ6A () }
+            }
+            Else
+            {
+                If (CondRefOf (XQ6A)) { XQ6A () }
+            }
+        }
+
+        // Requires patch: _Q6B -> XQ6B
+        Method (_Q6B, 0, NotSerialized)
+        {
+            If (_OSI ("Darwin"))
+            {
+                \_SB.GRAM.NEVT (0x6B)
+                If (CondRefOf (XQ6B)) { XQ6B () }
+            }
+            Else
+            {
+                If (CondRefOf (XQ6B)) { XQ6B () }
+            }
+        }
+
+                // Reader Mode Key (Fn + F9)
+        // This manages the EC Register 0x64 directly.
+        Method (_Q72, 0, NotSerialized)
+        {
+            If (_OSI ("Darwin"))
+            {
+                // Send 0xF9 to GramSMC Kext
+                // Kext will toggle Reader Mode (via SRDM) and notify App
+                \_SB.GRAM.NEVT (0xF9)
+            }
+            Else
+            {
+                If (CondRefOf (XQ72)) { XQ72 () }
+            }
+        }
+
+        // Requires patch: _Q7B -> XQ7B
+        Method (_Q7B, 0, NotSerialized)
+        {
+            If (_OSI ("Darwin"))
+            {
+                \_SB.GRAM.NEVT (0x7B)
+                If (CondRefOf (XQ7B)) { XQ7B () }
+            }
+            Else
+            {
+                If (CondRefOf (XQ7B)) { XQ7B () }
+            }
+        }
+
+        // Requires patch: _Q7C -> XQ7C
+        Method (_Q7C, 0, NotSerialized)
+        {
+            If (_OSI ("Darwin"))
+            {
+                \_SB.GRAM.NEVT (0x7C)
+                If (CondRefOf (XQ7C)) { XQ7C () }
+            }
+            Else
+            {
+                If (CondRefOf (XQ7C)) { XQ7C () }
+            }
+        }
+
+        // Requires patch: _Q52 -> XQ52 (Volume Down)
+        Method (_Q52, 0, NotSerialized)
+        {
+            If (_OSI ("Darwin"))
+            {
+                \_SB.GRAM.NEVT (0x52)
+                If (CondRefOf (XQ52)) { XQ52 () }
+            }
+            Else
+            {
+                If (CondRefOf (XQ52)) { XQ52 () }
+            }
+        }
+
+        // Requires patch: _Q53 -> XQ53 (Volume Up)
+        Method (_Q53, 0, NotSerialized)
+        {
+            If (_OSI ("Darwin"))
+            {
+                \_SB.GRAM.NEVT (0x53)
+                If (CondRefOf (XQ53)) { XQ53 () }
+            }
+            Else
+            {
+                If (CondRefOf (XQ53)) { XQ53 () }
             }
         }
     }

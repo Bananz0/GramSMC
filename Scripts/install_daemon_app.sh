@@ -17,6 +17,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Configuration
 DAEMON_DEST="/usr/local/bin"
 DAEMON_PLIST="/Library/LaunchDaemons"
+AGENT_PLIST="/Library/LaunchAgents"
 APP_DEST="/Applications"
 
 echo -e "${BLUE}=== GramSMC Daemon & App Installer ===${NC}"
@@ -65,6 +66,16 @@ else
 fi
 
 echo -e "${GREEN}Daemon installed.${NC}"
+
+# Install app agent plist
+if [ -f "$SCRIPT_DIR/com.bananz0.GramControlCenter.plist" ]; then
+    sudo cp "$SCRIPT_DIR/com.bananz0.GramControlCenter.plist" "$AGENT_PLIST/"
+    sudo chown root:wheel "$AGENT_PLIST/com.bananz0.GramControlCenter.plist"
+    sudo chmod 644 "$AGENT_PLIST/com.bananz0.GramControlCenter.plist"
+    echo -e "${GREEN}App agent installed.${NC}"
+else
+    echo -e "${YELLOW}Warning: com.bananz0.GramControlCenter.plist not found (autostart may not work)${NC}"
+fi
 
 # Step 3: Install App
 echo -e "\n${BLUE}[3/3] Installing GramControlCenter...${NC}"
