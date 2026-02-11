@@ -287,6 +287,29 @@ install_vsmc_sdk() {
   return 0
 }
 
+# Install MacKernelSDK
+install_mackernel_sdk() {
+  local ret=0
+
+  echo "Installing MacKernelSDK..."
+
+  if [ -d "${PROJECT_PATH}/MacKernelSDK" ]; then
+    echo "-> MacKernelSDK already exists, skipping download."
+    return 0
+  fi
+
+  local url="https://github.com/acidanthera/MacKernelSDK"
+  "${GIT}" clone "${url}" "${PROJECT_PATH}/MacKernelSDK" || ret=$?
+  if [ $ret -ne 0 ]; then
+    echo "ERROR: Failed to clone MacKernelSDK with code ${ret}!"
+    return 1
+  fi
+
+  echo "Installed MacKernelSDK!"
+
+  return 0
+}
+
 prepare_environment || exit 1
 
 ret=0
@@ -296,6 +319,10 @@ install_lilu_sdk || ret=$?
 echo "------------------------------"
 
 install_vsmc_sdk || ret=$?
+
+echo "------------------------------"
+
+install_mackernel_sdk || ret=$?
 
 cd "${PROJECT_PATH}" || ret=$?
 
