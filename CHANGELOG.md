@@ -1,6 +1,14 @@
 # GramSMC Changelog
 
-## v1.5.0 (Development)
+## v1.5.1
+
+### Fixed
+- Fixed kext build failure on macOS 26 / Xcode 26.2 CI runner.
+- Updated header search paths for MacKernelSDK compatibility.
+- Added ARM64e library support for kernel extensions.
+- Synchronized all component versions to 1.5.1.
+
+## v1.5.0
 
 GramSMC is a fork of AsusSMC adapted for LG Gram laptops. Built for macOS Tahoe (macOS 26) with Xcode 26.
 
