@@ -1,15 +1,34 @@
 # GramSMC
 
-A VirtualSMC plugin for LG Gram laptops on macOS. Provides ambient light sensor support, keyboard backlight control, function key handling, and fan monitoring.
-
-Based on AsusSMC by Le Bao Hiep (https://github.com/hieplpvip/AsusSMC).
+VirtualSMC plugin and control center for LG Gram laptops on macOS. Provides a Liquid Glass menu bar UI, a background daemon for hardware events, and a kernel extension that exposes EC-backed properties to user space.
 
 Project Home: https://github.com/Bananz0/GramSMC
 
+## Screenshots
 
-## Current Status
+### Legacy UI (reference)
 
-GramSMC v1.5.0 is under active development. Built for macOS Tahoe (macOS 26) with Xcode 26.
+![Legacy UI](assets/gramsmc-legacy-ui.png)
+
+### Liquid Glass settings window
+
+![Liquid Glass Settings](assets/gramsmc-liquid-glass-settings.png)
+
+### Menu bar popover
+
+![Menu Bar Popover](assets/gramsmc-menu-popover.png)
+
+## Highlights (1.5.0)
+
+- Liquid Glass design system across the menu bar popover and settings window
+- Centered LG gram branding header with live CPU and fan telemetry
+- Touchpad toggle wired to IsTouchpadEnabled
+- Reader Mode wired to Night Shift
+- Quick controls for fan mode, battery care, USB charging, keyboard backlight, and Fn lock
+
+## Status
+
+GramSMC v1.5.0 is the current release candidate. Built for macOS Tahoe (macOS 26) with Xcode 26.
 
 ### Working
 
@@ -34,14 +53,13 @@ GramSMC v1.5.0 is under active development. Built for macOS Tahoe (macOS 26) wit
 - Some function key actions need hardware testing
 - OSD bezels for all feature toggles
 
-
 ## Components
 
 ### SSDT-GramSMC.dsl
 
 Defines the GRAM0001 device and provides methods for EC access.
 
-Location: ACPI-Gram/Patched/SSDT-GramSMC.dsl
+Location: GramSMC/SSDT-GramSMC.dsl
 
 Key methods:
 - GKBL/SKBL for keyboard backlight
@@ -86,7 +104,8 @@ Controls:
 - Battery care limit
 - USB charging toggle
 - Fn lock toggle
-
+- Touchpad toggle
+- Reader Mode (Night Shift)
 
 ## Requirements
 
@@ -97,19 +116,18 @@ Controls:
 - VirtualSMC (https://github.com/acidanthera/VirtualSMC)
 - OpenCore bootloader
 
-
 ## Installation
 
 ### 1. Compile SSDT
 
 ```
-cd ACPI-Gram/Patched
+cd GramSMC
 iasl SSDT-GramSMC.dsl
 ```
 
 Copy SSDT-GramSMC.aml to EFI/OC/ACPI/
 
-### 2. Add ACPI Patches
+### 2. Add ACPI patches
 
 Add the following patches to config.plist under ACPI, Patch:
 
@@ -126,19 +144,19 @@ Add the following patches to config.plist under ACPI, Patch:
 | _Q53 to XQ53 | 5F513533 | 58513533 |
 | _Q72 to XQ72 | 5F513732 | 58513732 |
 
-### 3. Install Kext
+### 3. Install kext
 
 Copy GramSMC.kext to EFI/OC/Kexts/ and add to config.plist Kernel, Add section.
 
-### 4. Install Daemon and App
+### 4. Install daemon and app
 
 ```
-cp GramSMCDaemon /usr/local/bin/
+cp GramSMCDaemon/GramSMCDaemon /usr/local/bin/
+cp GramSMCDaemon/com.bananz0.GramSMCDaemon.plist /Library/LaunchDaemons/
 cp -R GramControlCenter.app /Applications/
 ```
 
-Install the launchd plist to auto-start the daemon.
-
+Load the launchd plist to auto-start the daemon.
 
 ## EC Register Reference
 
@@ -159,7 +177,6 @@ The following EC registers are accessed by GramSMC. See Research/EC_Dumps/ for t
 
 For detailed WMI and EC documentation see Research/LG_GRAM_EC_WMI_REFERENCE.md.
 
-
 ## Function Keys
 
 | Key | EC Query | Action |
@@ -177,7 +194,6 @@ For detailed WMI and EC documentation see Research/LG_GRAM_EC_WMI_REFERENCE.md.
 | Fn+F11 | _Q52 | Volume down |
 | Fn+F12 | _Q53 | Volume up |
 
-
 ## Fan Modes
 
 GramSMC supports two fan modes matching the original LG Control Center:
@@ -187,12 +203,10 @@ GramSMC supports two fan modes matching the original LG Control Center:
 | Normal | 0x00 | Standard fan behavior |
 | Silent | 0x11 | Reduced fan speed for quiet operation |
 
-
 ## Boot Arguments
 
-- `-gramsmcdbg` enables debug logging in DEBUG builds
-- `-vsmcdbg` enables VirtualSMC debug logging
-
+- -gramsmcdbg enables debug logging in DEBUG builds
+- -vsmcdbg enables VirtualSMC debug logging
 
 ## Building from Source
 
@@ -206,20 +220,19 @@ GramSMC supports two fan modes matching the original LG Control Center:
 
 ### Build
 
-```
+```bash
 git clone https://github.com/acidanthera/MacKernelSDK
 cd GramSMC
 bash Scripts/bootstrap.sh
-xcodebuild -project GramSMC.xcodeproj \
-           -scheme 'GramSMC All' \
-           -configuration Release \
-           -derivedDataPath build \
-           build
+bash Scripts/build.sh Release
 ```
 
-Artifacts will be located in `build/Release/`.
+Artifacts will be located in `build/Release/` and `GramSMC/SSDT-GramSMC.aml`.
+This script builds all components: the Kext, the App, the Daemon, and the SSDT.
 
+## CI and Releases
 
+The GitHub Actions workflow builds the kext, app, daemon, and SSDT, and publishes a release zip on tagged builds.
 
 ## Research Data
 
@@ -230,18 +243,15 @@ The Research/ directory contains:
 
 These dumps were captured by toggling features in LG Control Center on Windows and comparing the binary differences.
 
-
 ## Future Considerations
 
 ECEnabler (https://github.com/averycblack/ECEnabler) may be used in future versions for EC reads and writes instead of custom SSDT methods.
-
 
 ## Known Issues
 
 - Full bidirectional app-to-hardware control needs hardware testing
 - Some function key LEDs may not synchronize with software state
 - Windows dual-boot may be affected by ACPI patches (boot Windows directly from BIOS to avoid)
-
 
 ## Credits
 
@@ -251,7 +261,6 @@ ECEnabler (https://github.com/averycblack/ECEnabler) may be used in future versi
 - lvs1974 and usr-sse2 for ambient light sensor support
 - tekezo for VirtualHIDKeyboard
 - Matan Ziv-Av for lg-laptop.c Linux driver
-
 
 ## License
 

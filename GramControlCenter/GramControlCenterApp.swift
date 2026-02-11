@@ -70,8 +70,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         
         // Refresh periodically (every 5 seconds)
         updateTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
+            guard let self = self else { return }
             Task { @MainActor in
-                self?.gramSMC.refresh()
+                self.gramSMC.refresh()
             }
         }
         
@@ -956,7 +957,18 @@ class GramSMCController: ObservableObject {
             port,
             service,
             kIOGeneralInterest,
-            gramSMCNotificationCallback,
+            { (refCon, service, messageType, messageArgument) in
+                guard let refCon = refCon else { return }
+                let controller = Unmanaged<GramSMCController>.fromOpaque(refCon).takeUnretainedValue()
+                
+                // In our Kext, we pass the Event Code as 'messageType'
+                // messageArgument is unused (0)
+                let eventCode = messageType
+                
+                Task { @MainActor in
+                    controller.handleEvent(code: eventCode)
+                }
+            },
             refCon,
             &notificationObject
         )
@@ -1042,19 +1054,17 @@ class GramSMCController: ObservableObject {
             return
         }
         
-        DispatchQueue.main.async { [self] in
-            capabilities = getProperty("Capabilities") ?? 0
-            keyboardBacklight = Int(getProperty("KeyboardBacklight") ?? 0)
-            fanMode = getProperty("FanMode") ?? 0
-            batteryCareLimit = Int(getProperty("BatteryCareLimit") ?? 100)
-            usbCharging = getBoolProperty("USBCharging")
-            fnLock = getBoolProperty("FnLock")
-            touchpadEnabled = getBoolProperty("IsTouchpadEnabled")
-            cpuTemp = Int(getProperty("CPUTemp") ?? 0)
-            fanRPM = Int(getProperty("FanRPM") ?? 0)
-            kextVersion = getStringProperty("GramSMC-Version") ?? "Unknown"
-            isConnected = true
-        }
+        capabilities = getProperty("Capabilities") ?? 0
+        keyboardBacklight = Int(getProperty("KeyboardBacklight") ?? 0)
+        fanMode = getProperty("FanMode") ?? 0
+        batteryCareLimit = Int(getProperty("BatteryCareLimit") ?? 100)
+        usbCharging = getBoolProperty("USBCharging")
+        fnLock = getBoolProperty("FnLock")
+        touchpadEnabled = getBoolProperty("IsTouchpadEnabled")
+        cpuTemp = Int(getProperty("CPUTemp") ?? 0)
+        fanRPM = Int(getProperty("FanRPM") ?? 0)
+        kextVersion = getStringProperty("GramSMC-Version") ?? "Unknown"
+        isConnected = true
     }
     
 
@@ -1180,7 +1190,7 @@ func gramSMCNotificationCallback(refCon: UnsafeMutableRawPointer?, service: io_s
     // messageArgument is unused (0)
     let eventCode = messageType
     
-    DispatchQueue.main.async {
+    Task { @MainActor in
         controller.handleEvent(code: eventCode)
     }
 }

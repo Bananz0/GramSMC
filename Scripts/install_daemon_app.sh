@@ -16,7 +16,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Configuration
 DAEMON_DEST="/usr/local/bin"
-DAEMON_PLIST="/Library/LaunchDaemons"
 AGENT_PLIST="/Library/LaunchAgents"
 APP_DEST="/Applications"
 
@@ -25,10 +24,15 @@ echo -e "${BLUE}=== GramSMC Daemon & App Installer ===${NC}"
 # Step 1: Stop existing services
 echo -e "\n${BLUE}[1/3] Stopping existing GramSMC services...${NC}"
 
+CURRENT_USER=$(stat -f '%u' /dev/console)
+
 # Kill daemon if running
 if pgrep -x "GramSMCDaemon" > /dev/null; then
     echo "Stopping GramSMCDaemon..."
-    sudo launchctl unload "$DAEMON_PLIST/com.bananz0.GramSMCDaemon.plist" 2>/dev/null || true
+    if [ "$CURRENT_USER" -ne 0 ]; then
+        sudo -u "#$CURRENT_USER" launchctl bootout "gui/$CURRENT_USER" "$AGENT_PLIST/com.bananz0.GramSMCDaemon.plist" 2>/dev/null || true
+    fi
+    sudo launchctl unload "$AGENT_PLIST/com.bananz0.GramSMCDaemon.plist" 2>/dev/null || true
     sudo killall -9 GramSMCDaemon 2>/dev/null || true
     sleep 2
 fi
@@ -55,17 +59,18 @@ sudo cp "$SCRIPT_DIR/GramSMCDaemon" "$DAEMON_DEST/"
 sudo chown root:wheel "$DAEMON_DEST/GramSMCDaemon"
 sudo chmod 755 "$DAEMON_DEST/GramSMCDaemon"
 
-# Install daemon plist
+# Install daemon plist as an Agent (for OSD support)
 if [ -f "$SCRIPT_DIR/com.bananz0.GramSMCDaemon.plist" ]; then
-    sudo cp "$SCRIPT_DIR/com.bananz0.GramSMCDaemon.plist" "$DAEMON_PLIST/"
-    sudo chown root:wheel "$DAEMON_PLIST/com.bananz0.GramSMCDaemon.plist"
-    sudo chmod 644 "$DAEMON_PLIST/com.bananz0.GramSMCDaemon.plist"
+    sudo cp "$SCRIPT_DIR/com.bananz0.GramSMCDaemon.plist" "$AGENT_PLIST/"
+    sudo chown root:wheel "$AGENT_PLIST/com.bananz0.GramSMCDaemon.plist"
+    sudo chmod 644 "$AGENT_PLIST/com.bananz0.GramSMCDaemon.plist"
 else
     echo -e "${RED}Error: com.bananz0.GramSMCDaemon.plist not found${NC}"
     exit 1
 fi
 
 echo -e "${GREEN}Daemon installed.${NC}"
+
 
 # Install app agent plist
 if [ -f "$SCRIPT_DIR/com.bananz0.GramControlCenter.plist" ]; then
@@ -91,16 +96,41 @@ sudo xattr -cr "$APP_DEST/GramControlCenter.app"
 
 echo -e "${GREEN}App installed.${NC}"
 
-# Step 4: Start daemon
-echo -e "\n${BLUE}Starting GramSMCDaemon...${NC}"
-sudo launchctl load "$DAEMON_PLIST/com.bananz0.GramSMCDaemon.plist"
+# Step 4: Start services
+echo -e "\n${BLUE}Starting services...${NC}"
+
+if [ "$CURRENT_USER" -ne 0 ]; then
+    # Start Daemon agent
+    echo "Bootstrapping GramSMCDaemon for user $CURRENT_USER..."
+    sudo -u "#$CURRENT_USER" launchctl bootstrap "gui/$CURRENT_USER" "$AGENT_PLIST/com.bananz0.GramSMCDaemon.plist" 2>/dev/null || true
+    
+    # Start Control Center agent if install successful
+    if [ -f "$AGENT_PLIST/com.bananz0.GramControlCenter.plist" ]; then
+        echo "Bootstrapping GramControlCenter agent for user $CURRENT_USER..."
+        sudo -u "#$CURRENT_USER" launchctl bootstrap "gui/$CURRENT_USER" "$AGENT_PLIST/com.bananz0.GramControlCenter.plist" 2>/dev/null || true
+    fi
+
+    # Launch the App manually just in case
+    echo "Launching GramControlCenter.app..."
+    sudo -u "#$CURRENT_USER" open "$APP_DEST/GramControlCenter.app"
+else
+    echo -e "${YELLOW}No logged-in user found. Services will start on next login.${NC}"
+fi
+
 sleep 2
 
-# Verify daemon is running
+# Verify services
+echo -e "\n${BLUE}Verifying status...${NC}"
 if pgrep -x "GramSMCDaemon" > /dev/null; then
     echo -e "${GREEN}✓ GramSMCDaemon started successfully${NC}"
 else
-    echo -e "${YELLOW}⚠ Daemon may not have started. Check with: sudo launchctl list | grep GramSMC${NC}"
+    echo -e "${YELLOW}⚠ GramSMCDaemon may not have started.${NC}"
+fi
+
+if pgrep -x "GramControlCenter" > /dev/null; then
+    echo -e "${GREEN}✓ GramControlCenter is running${NC}"
+else
+    echo -e "${RED}⚠ GramControlCenter failed to launch.${NC}"
 fi
 
 # Summary
