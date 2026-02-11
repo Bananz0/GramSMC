@@ -696,6 +696,12 @@
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MACOSX_DEPLOYMENT_TARGET = 26.2;
 				MARKETING_VERSION = 1.5.0;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-framework",
+					CoreBrightness,
+					"-F/System/Library/PrivateFrameworks",
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = bananz0.GramControlCenter;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -704,11 +710,10 @@
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OBJC_BRIDGING_HEADER = "GramControlCenter/GramControlCenter-Bridging-Header.h";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
-				SWIFT_OBJC_BRIDGING_HEADER = "GramControlCenter/GramControlCenter-Bridging-Header.h";
-				OTHER_LDFLAGS = "$(inherited) -framework CoreBrightness -F/System/Library/PrivateFrameworks";
 			};
 			name = Debug;
 		};
@@ -740,6 +745,12 @@
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MACOSX_DEPLOYMENT_TARGET = 26.2;
 				MARKETING_VERSION = 1.5.0;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-framework",
+					CoreBrightness,
+					"-F/System/Library/PrivateFrameworks",
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = bananz0.GramControlCenter;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -748,10 +759,9 @@
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OBJC_BRIDGING_HEADER = "GramControlCenter/GramControlCenter-Bridging-Header.h";
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
-				SWIFT_OBJC_BRIDGING_HEADER = "GramControlCenter/GramControlCenter-Bridging-Header.h";
-				OTHER_LDFLAGS = "$(inherited) -framework CoreBrightness -F/System/Library/PrivateFrameworks";
 			};
 			name = Release;
 		};
@@ -890,7 +900,6 @@
 				CURRENT_PROJECT_VERSION = 1.5.0;
 				DEAD_CODE_STRIPPING = YES;
 				GCC_PREPROCESSOR_DEFINITIONS = (
-
 					"MODULE_VERSION=$(MODULE_VERSION)",
 					"$(inherited)",
 				);
@@ -921,7 +930,6 @@
 				CURRENT_PROJECT_VERSION = 1.5.0;
 				DEAD_CODE_STRIPPING = YES;
 				GCC_PREPROCESSOR_DEFINITIONS = (
-
 					"MODULE_VERSION=$(MODULE_VERSION)",
 					"$(inherited)",
 				);

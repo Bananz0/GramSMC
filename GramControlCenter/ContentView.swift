@@ -12,18 +12,32 @@ struct ContentView: View {
     var body: some View {
         // Main app uses GramControlCenterApp.swift with menu bar
         // This view is a placeholder for potential future windowed mode
-        VStack(spacing: 16) {
-            Image(systemName: "laptopcomputer")
-                .imageScale(.large)
-                .font(.system(size: 48))
-                .foregroundStyle(.tint)
-            Text("LG Gram Control Center")
-                .font(.title2)
-            Text("Use the menu bar icon to access controls")
-                .font(.caption)
-                .foregroundColor(.secondary)
+        ZStack {
+            VisualEffectBlur(material: .hudWindow, blendingMode: .behindWindow)
+                .edgesIgnoringSafeArea(.all)
+                .overlay(LGGlass.backdrop)
+
+            VStack(spacing: 16) {
+                Image(systemName: "laptopcomputer")
+                    .imageScale(.large)
+                    .font(.system(size: 48))
+                    .foregroundStyle(LGGlass.accentGradient)
+                Text("LG Gram Control Center")
+                    .font(.title2)
+                    .foregroundColor(LGColor.text)
+                Text("Use the menu bar icon to access controls")
+                    .font(LGFont.caption)
+                    .foregroundColor(LGColor.textSecondary)
+            }
+            .padding(32)
+            .background(
+                LGGlassSurface(
+                    cornerRadius: LGLayout.cornerRadius,
+                    material: LGGlass.cardMaterial
+                )
+            )
         }
-        .padding(40)
+        .frame(width: 520, height: 360)
     }
 }
 

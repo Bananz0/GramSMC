@@ -30,6 +30,33 @@ struct VisualEffectBlur: NSViewRepresentable {
     }
 }
 
+// MARK: - LGGlassSurface (Liquid Glass Background)
+
+struct LGGlassSurface: View {
+    let cornerRadius: CGFloat
+    let material: Material
+    var showsShadow: Bool = true
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            .fill(material)
+            .background(
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .fill(LGColor.glassBase)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .stroke(LGColor.border, lineWidth: 1)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .stroke(LGGlass.highlight, lineWidth: 1)
+                    .blendMode(.screen)
+            )
+            .shadow(color: showsShadow ? LGGlass.shadow : .clear, radius: 12, x: 0, y: 6)
+    }
+}
+
 // MARK: - LGCard (Container with Blur Support)
 
 struct LGCard<Content: View>: View {
@@ -44,33 +71,40 @@ struct LGCard<Content: View>: View {
     }
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 8) {
             // Card Header
-            HStack(spacing: 8) {
+            HStack(spacing: 6) {
                 if let customIcon = NSImage(named: icon) {
                     Image(nsImage: customIcon)
                         .resizable()
-                        .frame(width: 18, height: 18)
+                        .frame(width: 14, height: 14)
                         .foregroundColor(LGColor.magenta)
                 } else {
                     Image(systemName: icon)
                         .foregroundColor(LGColor.magenta)
-                        .font(.system(size: 16))
+                        .font(.system(size: 14))
                 }
                 Text(title)
                     .font(LGFont.cardTitle)
                     .foregroundColor(LGColor.text)
+                    .lineLimit(1)
             }
             
             Divider()
-                .background(LGColor.border)
+                .background(LGColor.glassDivider)
             
             // Card Content
             content
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(LGLayout.cardPadding)
-        .background(LGColor.cardBackground)
-        .cornerRadius(LGLayout.cornerRadius)
+        .padding(10)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(
+            LGGlassSurface(
+                cornerRadius: LGLayout.cornerRadius,
+                material: LGGlass.cardMaterial
+            )
+        )
     }
 }
 
@@ -83,8 +117,7 @@ struct LGSegmentedControl<T: Hashable>: View {
     
     var body: some View {
         HStack(spacing: 0) {
-            ForEach(options.indices, id: \.self) { index in
-                let option = options[index]
+            ForEach(Array(options.enumerated()), id: \.offset) { index, option in
                 Button(action: {
                     if isEnabled {
                         selection = option.0
@@ -95,21 +128,32 @@ struct LGSegmentedControl<T: Hashable>: View {
                         .foregroundColor(selection == option.0 ? .white : LGColor.textSecondary)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 8)
-                        .background(selection == option.0 ? LGColor.magenta : Color.clear)
+                        .background(
+                            RoundedRectangle(cornerRadius: LGLayout.segmentInnerRadius, style: .continuous)
+                                .fill(selection == option.0
+                                    ? AnyShapeStyle(LGGlass.accentGradient)
+                                    : AnyShapeStyle(Color.clear)
+                                )
+                        )
                 }
                 .buttonStyle(.plain)
+                .contentShape(Rectangle())
                 
                 if index < options.count - 1 {
                     Divider()
                         .frame(height: 20)
-                        .background(LGColor.border)
+                        .background(LGColor.glassDivider)
                 }
             }
         }
-        .background(LGColor.cardBackground)
-        .overlay(
-            RoundedRectangle(cornerRadius: LGLayout.cornerRadius)
-                .stroke(LGColor.border, lineWidth: 1)
+        .frame(maxWidth: .infinity)
+        .padding(2)
+        .background(
+            LGGlassSurface(
+                cornerRadius: LGLayout.segmentCornerRadius,
+                material: LGGlass.controlMaterial,
+                showsShadow: false
+            )
         )
         .opacity(isEnabled ? 1.0 : 0.5)
     }
@@ -128,7 +172,20 @@ struct LGToggleStyle: ToggleStyle {
             ZStack {
                 // Track
                 Capsule()
-                    .fill(configuration.isOn ? LGColor.magenta : Color(hex: 0xCCCCCC))
+                    .fill(configuration.isOn
+                        ? AnyShapeStyle(LGGlass.accentGradient)
+                        : AnyShapeStyle(LGGlass.controlMaterial)
+                    )
+                    .overlay(
+                        Capsule()
+                            .stroke(LGColor.border, lineWidth: 1)
+                    )
+                    .overlay(
+                        Capsule()
+                            .stroke(LGGlass.highlight, lineWidth: 1)
+                            .blendMode(.screen)
+                            .opacity(0.5)
+                    )
                     .frame(width: 44, height: 24)
                 
                 // Thumb
@@ -146,6 +203,38 @@ struct LGToggleStyle: ToggleStyle {
             }
         }
         .opacity(isEnabled ? 1.0 : 0.5)
+    }
+}
+
+// MARK: - LGGlassButtonStyle
+
+struct LGGlassButtonStyle: ButtonStyle {
+    var isPrimary: Bool = false
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(LGFont.body)
+            .foregroundColor(isPrimary ? .white : LGColor.text)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(
+                RoundedRectangle(cornerRadius: LGLayout.segmentInnerRadius, style: .continuous)
+                    .fill(isPrimary
+                        ? AnyShapeStyle(LGGlass.accentGradient)
+                        : AnyShapeStyle(LGGlass.controlMaterial)
+                    )
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: LGLayout.segmentInnerRadius, style: .continuous)
+                    .stroke(LGColor.border, lineWidth: 1)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: LGLayout.segmentInnerRadius, style: .continuous)
+                    .stroke(LGGlass.highlight, lineWidth: 1)
+                    .blendMode(.screen)
+                    .opacity(isPrimary ? 0.6 : 0.35)
+            )
+            .scaleEffect(configuration.isPressed ? 0.98 : 1.0)
     }
 }
 
@@ -201,7 +290,7 @@ struct LGSlider: View {
                     
                     // Filled Track
                     Capsule()
-                        .fill(LGColor.magenta)
+                        .fill(LGGlass.accentGradient)
                         .frame(width: filledWidth(totalWidth: geometry.size.width), height: LGLayout.sliderTrackHeight)
                     
                     // Thumb
@@ -346,10 +435,12 @@ struct LGStatusCard: View {
         }
         .frame(maxWidth: .infinity)
         .padding(12)
-        .background(LGColor.sectionBackground)
-        .overlay(
-            RoundedRectangle(cornerRadius: LGLayout.cornerRadius)
-                .stroke(LGColor.border, lineWidth: 1)
+        .background(
+            LGGlassSurface(
+                cornerRadius: LGLayout.cornerRadius,
+                material: LGGlass.cardMaterial,
+                showsShadow: false
+            )
         )
     }
 }

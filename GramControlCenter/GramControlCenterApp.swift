@@ -32,11 +32,13 @@ struct GramControlCenterApp: App {
     }
 }
 
-class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
-    var statusItem: NSStatusItem!
-    var gramSMC: GramSMCController!
-    var updateTimer: Timer?
-    var settingsWindow: NSWindow?
+@MainActor
+final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
+    private var statusItem: NSStatusItem!
+    private var gramSMC: GramSMCController!
+    private var updateTimer: Timer?
+    private var settingsWindow: NSWindow?
+    private var popover: NSPopover?
     
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Hide dock icon (backup, Info.plist should have LSUIElement=true)
@@ -54,18 +56,23 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 button.image = NSImage(systemSymbolName: "laptopcomputer", accessibilityDescription: "LG Gram Control Center")
                 button.image?.isTemplate = true
             }
+
+            button.target = self
+            button.action = #selector(handleStatusItemClick(_:))
+            button.sendAction(on: [.leftMouseUp, .rightMouseUp])
         }
         
         // Initialize GramSMC controller
         gramSMC = GramSMCController()
-        
-        // Build initial menu
-        updateMenu()
+
+        // Configure popover for liquid glass menu UI
+        configurePopover()
         
         // Refresh periodically (every 5 seconds)
         updateTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
-            self?.gramSMC.refresh()
-            self?.updateMenu()
+            Task { @MainActor in
+                self?.gramSMC.refresh()
+            }
         }
         
         // Request notification permission
@@ -80,25 +87,82 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         updateTimer?.invalidate()
     }
     
-    func updateMenu() {
+    @objc private func handleStatusItemClick(_ sender: Any?) {
+        guard let event = NSApp.currentEvent else { return }
+
+        switch event.type {
+        case .rightMouseUp, .rightMouseDown:
+            showContextMenu(event: event)
+        default:
+            togglePopover()
+        }
+    }
+
+    private func configurePopover() {
+        let popover = NSPopover()
+        popover.behavior = .transient
+        popover.animates = true
+        popover.appearance = NSAppearance(named: .vibrantLight)
+        popover.contentViewController = NSHostingController(
+            rootView: MenuPopoverView(
+                controller: gramSMC,
+                onOpenSettings: { [weak self] in
+                    self?.closePopover()
+                    self?.openSettings()
+                },
+                onQuit: {
+                    NSApp.terminate(nil)
+                }
+            )
+        )
+        popover.contentSize = NSSize(width: LGLayout.menuWidth, height: LGLayout.menuHeight)
+        self.popover = popover
+    }
+
+    private func togglePopover() {
+        guard let button = statusItem.button else { return }
+        if popover?.isShown == true {
+            closePopover()
+        } else {
+            gramSMC.refresh()
+            popover?.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+        }
+    }
+
+    private func closePopover() {
+        popover?.performClose(nil)
+    }
+
+    private func showContextMenu(event: NSEvent) {
+        gramSMC.refresh()
+        let menu = makeContextMenu()
+        if let button = statusItem.button {
+            NSMenu.popUpContextMenu(menu, with: event, for: button)
+        }
+    }
+
+    private func makeContextMenu() -> NSMenu {
         let menu = NSMenu()
         let isConnected = gramSMC.isConnected
-        
+
+        menu.appearance = NSAppearance(named: .vibrantLight)
+        menu.minimumWidth = 220
+
         // Header with status
-        let statusText = isConnected ? "✓ GramSMC Connected" : "✗ GramSMC Not Found"
+        let statusText = isConnected ? "GramSMC Connected" : "GramSMC Not Found"
         let headerItem = NSMenuItem(title: statusText, action: nil, keyEquivalent: "")
         headerItem.isEnabled = false
         menu.addItem(headerItem)
-        
+
         // Status info (when connected)
         if isConnected {
             let infoItem = NSMenuItem(title: "CPU: \(gramSMC.cpuTemp)°C  •  Fan: \(gramSMC.fanRPM) RPM", action: nil, keyEquivalent: "")
             infoItem.isEnabled = false
             menu.addItem(infoItem)
         }
-        
+
         menu.addItem(NSMenuItem.separator())
-        
+
         // Open Settings Window
         let settingsItem = NSMenuItem(title: "Open Settings...", action: #selector(openSettings), keyEquivalent: ",")
         settingsItem.target = self
@@ -107,21 +171,22 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             settingsItem.image?.size = NSSize(width: 16, height: 16)
         }
         menu.addItem(settingsItem)
-        
+
         menu.addItem(NSMenuItem.separator())
-        
+
         // Quick Toggles
         let kblLevels = ["Off", "Low", "High"]
         let kblIconNames = ["icon_KBD_off", "icon_KBD_low", "icon_KBD_high"]
-        let kblItem = NSMenuItem(title: "Keyboard: \(kblLevels[gramSMC.keyboardBacklight])", action: #selector(cycleKeyboardBacklight), keyEquivalent: "")
+        let kblIndex = max(0, min(gramSMC.keyboardBacklight, kblLevels.count - 1))
+        let kblItem = NSMenuItem(title: "Keyboard: \(kblLevels[kblIndex])", action: #selector(cycleKeyboardBacklight), keyEquivalent: "")
         kblItem.target = self
         kblItem.isEnabled = isConnected
-        if let icon = NSImage(named: kblIconNames[Int(gramSMC.keyboardBacklight) % 3]) {
+        if let icon = NSImage(named: kblIconNames[min(kblIndex, kblIconNames.count - 1)]) {
             kblItem.image = icon
             kblItem.image?.size = NSSize(width: 16, height: 16)
         }
         menu.addItem(kblItem)
-        
+
         let silentItem = NSMenuItem(title: "Silent Mode", action: #selector(toggleSilentMode), keyEquivalent: "")
         silentItem.target = self
         silentItem.state = gramSMC.silentMode ? .on : .off
@@ -131,7 +196,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             silentItem.image?.size = NSSize(width: 16, height: 16)
         }
         menu.addItem(silentItem)
-        
+
         let batteryItem = NSMenuItem(title: "Battery Care (\(gramSMC.batteryCareLimit)%)", action: #selector(toggleBatteryCare), keyEquivalent: "")
         batteryItem.target = self
         batteryItem.state = gramSMC.batteryCareLimit == 80 ? .on : .off
@@ -141,15 +206,15 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             batteryItem.image?.size = NSSize(width: 16, height: 16)
         }
         menu.addItem(batteryItem)
-        
+
         menu.addItem(NSMenuItem.separator())
-        
+
         // Quit
         let quitItem = NSMenuItem(title: "Quit", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         menu.addItem(quitItem)
-        
+
         menu.delegate = self
-        statusItem.menu = menu
+        return menu
     }
     
     // MARK: - NSMenuDelegate
@@ -157,7 +222,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func menuWillOpen(_ menu: NSMenu) {
         // Refresh values right before menu is displayed
         gramSMC.refresh()
-        updateMenu()
     }
     
     // MARK: - Quick Actions
@@ -165,29 +229,26 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc func cycleKeyboardBacklight() {
         let newLevel = (gramSMC.keyboardBacklight + 1) % 3
         gramSMC.setKeyboardBacklight(UInt32(newLevel))
-        updateMenu()
     }
     
     @objc func toggleSilentMode() {
         gramSMC.setSilentMode(!gramSMC.silentMode)
-        updateMenu()
     }
     
     @objc func cycleFanMode() {
-        let newMode = (gramSMC.fanMode + 1) % 3
+        let newMode = (gramSMC.fanMode + 1) % 2
         gramSMC.setFanMode(newMode)
-        updateMenu()
     }
     
     @objc func toggleBatteryCare() {
         let newLimit: UInt32 = gramSMC.batteryCareLimit == 80 ? 100 : 80
         gramSMC.setBatteryCareLimit(newLimit)
-        updateMenu()
     }
     
     // MARK: - Settings Window
     
     @objc func openSettings() {
+        closePopover()
         if settingsWindow == nil {
             let contentView = SettingsView(controller: gramSMC)
             settingsWindow = NSWindow(
@@ -198,7 +259,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             )
             settingsWindow?.title = "LG Gram Control Center"
             settingsWindow?.titlebarAppearsTransparent = true
+            settingsWindow?.titleVisibility = .hidden
+            settingsWindow?.titlebarSeparatorStyle = .none
             settingsWindow?.isMovableByWindowBackground = true
+            settingsWindow?.isOpaque = false
             settingsWindow?.backgroundColor = .clear // Important for VisualEffectView
             settingsWindow?.contentView = NSHostingView(rootView: contentView)
             settingsWindow?.center()
@@ -215,186 +279,533 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 struct SettingsView: View {
     @ObservedObject var controller: GramSMCController
     @State private var refreshTimer: Timer?
-    
+
     var body: some View {
         ZStack {
             // Native macOS Background Blur
-            VisualEffectBlur(material: .sidebar, blendingMode: .behindWindow)
+            VisualEffectBlur(material: .hudWindow, blendingMode: .behindWindow)
                 .edgesIgnoringSafeArea(.all)
-            
+                .overlay(LGGlass.backdrop)
+
             VStack(spacing: 0) {
-                // Spacer for Title Bar
-                Color.clear
-                    .frame(height: 38)
-                
-                // Main Content (flexible)
-                HStack(alignment: .top, spacing: LGLayout.gutter) {
-                    systemSettingsColumn
-                        .frame(maxWidth: .infinity)
-                    inputDisplayColumn
-                        .frame(maxWidth: .infinity)
+                headerRow
+
+                ScrollView {
+                    Grid(alignment: .top, horizontalSpacing: LGLayout.gutter, verticalSpacing: LGLayout.gutter) {
+                        GridRow {
+                            fanModeCard
+                            batteryCareCard
+                            keyboardBacklightCard
+                        }
+                        GridRow {
+                            usbChargingCard
+                            touchpadCard
+                            fnLockCard
+                        }
+                        GridRow {
+                            readerModeCard
+                            Color.clear
+                            Color.clear
+                        }
+                    }
+                    .frame(maxHeight: .infinity)
+                    .padding(.horizontal, LGLayout.padding)
+                    .padding(.bottom, LGLayout.padding)
                 }
-                .padding(LGLayout.padding)
-                
-                Spacer(minLength: 8)
+                .scrollDisabled(true)
 
                 // Footer with versions (fixed at bottom)
                 HStack(spacing: 16) {
                     Text("App: \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0")")
                         .font(LGFont.caption)
                         .foregroundColor(LGColor.textSecondary)
-                    
+
                     Text("Kext: \(controller.kextVersion)")
                         .font(LGFont.caption)
                         .foregroundColor(LGColor.textSecondary)
-                    
+
                     Text("Daemon: 1.5.0")
                         .font(LGFont.caption)
                         .foregroundColor(LGColor.textSecondary)
-                    
+
                     Spacer()
                 }
                 .padding(.horizontal, LGLayout.padding)
                 .padding(.vertical, 8)
-                .background(Color(NSColor.windowBackgroundColor).opacity(0.5))
+                .background(
+                    LGGlassSurface(
+                        cornerRadius: 0,
+                        material: LGGlass.footerMaterial,
+                        showsShadow: false
+                    )
+                )
+                .overlay(
+                    Rectangle()
+                        .fill(LGColor.glassDivider)
+                        .frame(height: 1),
+                    alignment: .top
+                )
             }
         }
         .frame(width: LGLayout.windowWidth, height: LGLayout.windowHeight)
         .onAppear {
             refreshTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { _ in
-                controller.refresh()
+                Task { @MainActor in
+                    controller.refresh()
+                }
             }
         }
         .onDisappear {
             refreshTimer?.invalidate()
         }
     }
-    
-    private var systemSettingsColumn: some View {
-        VStack(spacing: LGLayout.gutter) {
-            // Fan Mode Card
-            LGCard(title: "Fan Mode", icon: "icon_pan_n") {
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("Control fan behavior")
-                        .font(LGFont.caption)
-                        .foregroundColor(LGColor.textSecondary)
-                    
-                    LGSegmentedControl(
-                        options: [(0, "Normal"), (1, "Silent")],
-                        selection: Binding(
-                            get: { Int(controller.fanMode) },
-                            set: { controller.setFanMode(UInt32($0)) }
-                        ),
-                        isEnabled: controller.isConnected
-                    )
+
+    private var headerRow: some View {
+        ZStack {
+            // Left Side: Status
+            HStack(spacing: 12) {
+                if let logo = NSImage(named: "title_icon_controlcenter") {
+                    Image(nsImage: logo)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(height: 18)
                 }
-            }
-            
-            // Battery Care Card
-            LGCard(title: "Battery Care", icon: "icon_battery_normal_n") {
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("Limit charging to extend battery lifespan")
-                        .font(LGFont.caption)
-                        .foregroundColor(LGColor.textSecondary)
-                    
-                    LGSegmentedControl(
-                        options: [(80, "80%"), (100, "100%")],
-                        selection: Binding(
-                            get: { controller.batteryCareLimit },
-                            set: { controller.setBatteryCareLimit(UInt32($0)) }
-                        ),
-                        isEnabled: controller.isConnected
-                    )
-                    
-                    Text("80% recommended for daily use")
-                        .font(LGFont.label)
+
+                HStack(spacing: 6) {
+                    Circle()
+                        .fill(controller.isConnected ? LGColor.statusGreen : LGColor.statusRed)
+                        .frame(width: 8, height: 8)
+                    Text(controller.isConnected ? "SMC Connected" : "SMC Disconnected")
+                        .font(LGFont.body)
                         .foregroundColor(LGColor.textSecondary)
                 }
+                
+                Spacer()
             }
-            
-            // USB Charging Card
-            LGCard(title: "USB Charging", icon: "icon_usb_n") {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Charge devices when laptop is off")
-                        .font(LGFont.caption)
-                        .foregroundColor(LGColor.textSecondary)
-                    
-                    Toggle(isOn: Binding(
-                        get: { controller.usbCharging },
-                        set: { controller.setUSBCharging($0) }
-                    )) {
-                        Text("Always On")
-                            .font(LGFont.body)
-                            .foregroundColor(LGColor.text)
+
+            // Center: LG gram Wordmark
+            if let wordmark = NSImage(named: "LG_Gram_wordmark") {
+                Image(nsImage: wordmark)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(height: 16)
+            }
+
+            // Right Side: Stats & Close
+            HStack(spacing: 16) {
+                Spacer()
+                
+                HStack(spacing: 16) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "cpu")
+                            .foregroundColor(LGColor.magenta)
+                        Text("\(controller.cpuTemp)°C")
                     }
-                    .toggleStyle(LGToggleStyle(isEnabled: controller.isConnected))
-                    .disabled(!controller.isConnected)
+                    HStack(spacing: 4) {
+                        Image(systemName: "fanblades")
+                            .foregroundColor(LGColor.magenta)
+                        Text("\(controller.fanRPM) RPM")
+                    }
                 }
+                .font(LGFont.label)
+                .foregroundColor(LGColor.text)
+
+                Button(action: { NSApp.keyWindow?.close() }) {
+                    Image(nsImage: NSImage(named: "popup_icon_close") ?? NSImage())
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 10, height: 10)
+                        .padding(6)
+                        .background(Circle().fill(Color.white.opacity(0.1)))
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, LGLayout.padding)
+        .padding(.top, 16)
+        .padding(.bottom, 12)
+    }
+
+    private var fanModeCard: some View {
+        LGCard(title: "Fan Mode", icon: "icon_pan_n") {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Control fan behavior")
+                    .font(LGFont.caption)
+                    .foregroundColor(LGColor.textSecondary)
+
+                LGSegmentedControl(
+                    options: [(0, "Normal"), (1, "Silent")],
+                    selection: Binding(
+                        get: { Int(controller.fanMode) },
+                        set: { controller.setFanMode(UInt32($0)) }
+                    ),
+                    isEnabled: controller.isConnected
+                )
             }
         }
     }
-    
-    private var inputDisplayColumn: some View {
-        VStack(spacing: LGLayout.gutter) {
-            // Keyboard Backlight Card
-            LGCard(title: "Keyboard Backlight", icon: "icon_KBD_high") {
-                VStack(alignment: .leading, spacing: 12) {
-                    LGSegmentedControl(
-                        options: [(0, "Off"), (1, "Low"), (2, "High")],
-                        selection: Binding(
-                            get: { controller.keyboardBacklight },
-                            set: { controller.setKeyboardBacklight(UInt32($0)) }
-                        ),
-                        isEnabled: controller.isConnected
-                    )
-                }
-            }
-            
-            // Fn Lock Card
-            LGCard(title: "Fn Lock", icon: "icon_hotkey_n") {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Use F1-F12 directly without Fn key")
-                        .font(LGFont.caption)
-                        .foregroundColor(LGColor.textSecondary)
-                    
-                    Toggle(isOn: Binding(
-                        get: { controller.fnLock },
-                        set: { controller.setFnLock($0) }
-                    )) {
-                        Text("Enabled")
-                            .font(LGFont.body)
-                            .foregroundColor(LGColor.text)
-                    }
-                    .toggleStyle(LGToggleStyle(isEnabled: controller.isConnected))
-                    .disabled(!controller.isConnected)
-                }
-            }
-            
-            // Night Shift Card
-            LGCard(title: "Reader Mode", icon: "icon_display_Kelvin") {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Reduce blue light (Fn+F9)")
-                        .font(LGFont.caption)
-                        .foregroundColor(LGColor.textSecondary)
-                    
-                    Toggle(isOn: Binding(
-                        get: { controller.nightShiftEnabled },
-                        set: { controller.setNightShift($0) }
-                    )) {
-                        Text("Night Shift")
-                            .font(LGFont.body)
-                            .foregroundColor(LGColor.text)
-                    }
-                    .toggleStyle(LGToggleStyle(isEnabled: controller.nightShiftSupported))
-                    .disabled(!controller.nightShiftSupported)
-                }
+
+    private var batteryCareCard: some View {
+        LGCard(title: "Battery Care", icon: "icon_battery_normal_n") {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Limit charging to extend battery lifespan")
+                    .font(LGFont.caption)
+                    .foregroundColor(LGColor.textSecondary)
+
+                LGSegmentedControl(
+                    options: [(80, "80%"), (100, "100%")],
+                    selection: Binding(
+                        get: { controller.batteryCareLimit },
+                        set: { controller.setBatteryCareLimit(UInt32($0)) }
+                    ),
+                    isEnabled: controller.isConnected
+                )
+
+                Text("80% recommended for daily use")
+                    .font(LGFont.label)
+                    .foregroundColor(LGColor.textSecondary)
             }
         }
     }
+
+    private var usbChargingCard: some View {
+        LGCard(title: "USB Charging", icon: "icon_usb_n") {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Charge devices when laptop is off")
+                    .font(LGFont.caption)
+                    .foregroundColor(LGColor.textSecondary)
+
+                Toggle(isOn: Binding(
+                    get: { controller.usbCharging },
+                    set: { controller.setUSBCharging($0) }
+                )) {
+                    Text("Always On")
+                        .font(LGFont.body)
+                        .foregroundColor(LGColor.text)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .toggleStyle(LGToggleStyle(isEnabled: controller.isConnected))
+                .disabled(!controller.isConnected)
+            }
         }
+    }
+
+    private var keyboardBacklightCard: some View {
+        LGCard(title: "Keyboard Backlight", icon: "icon_KBD_high") {
+            VStack(alignment: .leading, spacing: 12) {
+                LGSegmentedControl(
+                    options: [(0, "Off"), (1, "Low"), (2, "High")],
+                    selection: Binding(
+                        get: { controller.keyboardBacklight },
+                        set: { controller.setKeyboardBacklight(UInt32($0)) }
+                    ),
+                    isEnabled: controller.isConnected
+                )
+            }
+        }
+    }
+
+    private var fnLockCard: some View {
+        LGCard(title: "Fn Lock", icon: "icon_hotkey_n") {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Use F1-F12 directly without Fn key")
+                    .font(LGFont.caption)
+                    .foregroundColor(LGColor.textSecondary)
+
+                Toggle(isOn: Binding(
+                    get: { controller.fnLock },
+                    set: { controller.setFnLock($0) }
+                )) {
+                    Text("Enabled")
+                        .font(LGFont.body)
+                        .foregroundColor(LGColor.text)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .toggleStyle(LGToggleStyle(isEnabled: controller.isConnected))
+                .disabled(!controller.isConnected)
+            }
+        }
+    }
+
+    private var readerModeCard: some View {
+        LGCard(title: "Reader Mode", icon: "icon_display_Kelvin") {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Reduce blue light (Fn+F9)")
+                    .font(LGFont.caption)
+                    .foregroundColor(LGColor.textSecondary)
+
+                Toggle(isOn: Binding(
+                    get: { controller.nightShiftEnabled },
+                    set: { controller.setNightShift($0) }
+                )) {
+                    Text("Night Shift")
+                        .font(LGFont.body)
+                        .foregroundColor(LGColor.text)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .toggleStyle(LGToggleStyle(isEnabled: controller.nightShiftSupported))
+                .disabled(!controller.nightShiftSupported)
+            }
+        }
+    }
+
+    private var touchpadCard: some View {
+        LGCard(title: "Touchpad", icon: "icon_touchpad_n") {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Enable or disable touchpad")
+                    .font(LGFont.caption)
+                    .foregroundColor(LGColor.textSecondary)
+
+                Toggle(isOn: Binding(
+                    get: { controller.touchpadEnabled },
+                    set: { controller.setTouchpad($0) }
+                )) {
+                    Text("Touchpad")
+                        .font(LGFont.body)
+                        .foregroundColor(LGColor.text)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .toggleStyle(LGToggleStyle(isEnabled: controller.isConnected))
+                .disabled(!controller.isConnected)
+            }
+        }
+    }
+}
+
+// MARK: - Menu Bar Popover (Liquid Glass)
+
+struct MenuPopoverView: View {
+    @ObservedObject var controller: GramSMCController
+    let onOpenSettings: () -> Void
+    let onQuit: () -> Void
+
+    var body: some View {
+        ZStack {
+            VisualEffectBlur(material: .menu, blendingMode: .behindWindow)
+                .edgesIgnoringSafeArea(.all)
+                .overlay(LGGlass.backdrop)
+
+            VStack(spacing: 12) {
+                headerRow
+
+                ScrollView {
+                    VStack(spacing: 12) {
+                        quickControls
+                    }
+                    .padding(.vertical, 2)
+                }
+
+                footerRow
+            }
+            .padding(LGLayout.menuPadding)
+        }
+        .frame(width: LGLayout.menuWidth, height: LGLayout.menuHeight)
+    }
+
+    private var headerRow: some View {
+        ZStack {
+            // Left Side: Icon + Status
+            HStack(spacing: 8) {
+                if let logo = NSImage(named: "title_icon_controlcenter") {
+                    Image(nsImage: logo)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(height: 14)
+                }
+
+                Circle()
+                    .fill(controller.isConnected ? LGColor.statusGreen : LGColor.statusRed)
+                    .frame(width: 6, height: 6)
+                Spacer()
+            }
+
+            // Center: LG gram Wordmark
+            if let wordmark = NSImage(named: "LG_Gram_wordmark") {
+                Image(nsImage: wordmark)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(height: 12)
+            }
+
+            // Right Side: Stats
+            HStack(spacing: 8) {
+                Spacer()
+                HStack(spacing: 4) {
+                    Image(systemName: "cpu")
+                    Text("\(controller.cpuTemp)°C")
+                }
+                Divider()
+                    .frame(height: 10)
+                    .background(LGColor.glassDivider)
+                HStack(spacing: 4) {
+                    Image(systemName: "fanblades")
+                    Text("\(controller.fanRPM) RPM")
+                }
+            }
+            .font(LGFont.label)
+            .foregroundColor(LGColor.textSecondary)
+        }
+        .padding(10)
+        .background(
+            LGGlassSurface(
+                cornerRadius: LGLayout.cornerRadius,
+                material: LGGlass.cardMaterial,
+                showsShadow: false
+            )
+        )
+    }
+
+    private var quickControls: some View {
+        VStack(alignment: .leading, spacing: LGLayout.gutter) {
+            controlRow(title: "Fan Mode", icon: "icon_pan_n") {
+                LGSegmentedControl(
+                    options: [(0, "Normal"), (1, "Silent")],
+                    selection: Binding(
+                        get: { Int(controller.fanMode) },
+                        set: { controller.setFanMode(UInt32($0)) }
+                    ),
+                    isEnabled: controller.isConnected
+                )
+                .frame(width: 160)
+            }
+
+            Divider().background(LGColor.glassDivider)
+
+            controlRow(title: "Battery Care", icon: "icon_battery_normal_n") {
+                LGSegmentedControl(
+                    options: [(80, "80%"), (100, "100%")],
+                    selection: Binding(
+                        get: { controller.batteryCareLimit },
+                        set: { controller.setBatteryCareLimit(UInt32($0)) }
+                    ),
+                    isEnabled: controller.isConnected
+                )
+                .frame(width: 160)
+            }
+
+            Divider().background(LGColor.glassDivider)
+
+            controlRow(title: "USB", subtitle: "Always On", icon: "icon_usb_n") {
+                Toggle("", isOn: Binding(
+                    get: { controller.usbCharging },
+                    set: { controller.setUSBCharging($0) }
+                ))
+                .labelsHidden()
+                .toggleStyle(LGToggleStyle(isEnabled: controller.isConnected))
+                .disabled(!controller.isConnected)
+            }
+
+            Divider().background(LGColor.glassDivider)
+
+            controlRow(title: "Keyboard", icon: "icon_KBD_high") {
+                LGSegmentedControl(
+                    options: [(0, "Off"), (1, "Low"), (2, "High")],
+                    selection: Binding(
+                        get: { controller.keyboardBacklight },
+                        set: { controller.setKeyboardBacklight(UInt32($0)) }
+                    ),
+                    isEnabled: controller.isConnected
+                )
+                .frame(width: 180)
+            }
+
+            Divider().background(LGColor.glassDivider)
+
+            controlRow(title: "Touchpad", icon: "icon_touchpad_n") {
+                Toggle("", isOn: Binding(
+                    get: { controller.touchpadEnabled },
+                    set: { controller.setTouchpad($0) }
+                ))
+                .labelsHidden()
+                .toggleStyle(LGToggleStyle(isEnabled: controller.isConnected))
+                .disabled(!controller.isConnected)
+            }
+
+            Divider().background(LGColor.glassDivider)
+
+            controlRow(title: "Fn Lock", icon: "icon_hotkey_n") {
+                Toggle("", isOn: Binding(
+                    get: { controller.fnLock },
+                    set: { controller.setFnLock($0) }
+                ))
+                .labelsHidden()
+                .toggleStyle(LGToggleStyle(isEnabled: controller.isConnected))
+                .disabled(!controller.isConnected)
+            }
+
+            Divider().background(LGColor.glassDivider)
+
+            controlRow(title: "Reader", icon: "icon_display_Kelvin") {
+                Toggle("", isOn: Binding(
+                    get: { controller.nightShiftEnabled },
+                    set: { controller.setNightShift($0) }
+                ))
+                .labelsHidden()
+                .toggleStyle(LGToggleStyle(isEnabled: controller.nightShiftSupported))
+                .disabled(!controller.nightShiftSupported)
+            }
+        }
+        .padding(12)
+        .background(
+            LGGlassSurface(
+                cornerRadius: LGLayout.cornerRadius,
+                material: LGGlass.cardMaterial,
+                showsShadow: false
+            )
+        )
+    }
+
+    private var footerRow: some View {
+        HStack(spacing: 8) {
+            Button("Open Settings") {
+                onOpenSettings()
+            }
+            .buttonStyle(LGGlassButtonStyle(isPrimary: true))
+
+            Button("Quit") {
+                onQuit()
+            }
+            .buttonStyle(LGGlassButtonStyle())
+        }
+        .frame(maxWidth: .infinity, alignment: .trailing)
+    }
+
+    private func controlRow<Control: View>(
+        title: String,
+        subtitle: String? = nil,
+        icon: String? = nil,
+        @ViewBuilder control: () -> Control
+    ) -> some View {
+        HStack(alignment: .center, spacing: 12) {
+            if let iconName = icon {
+                if let customIcon = NSImage(named: iconName) {
+                    Image(nsImage: customIcon)
+                        .resizable()
+                        .frame(width: 16, height: 16)
+                }
+            }
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(LGFont.body)
+                    .foregroundColor(LGColor.text)
+                if let subtitle = subtitle {
+                    Text(subtitle)
+                        .font(LGFont.caption)
+                        .foregroundColor(LGColor.textSecondary)
+                }
+            }
+
+            Spacer(minLength: 8)
+
+            control()
+        }
+    }
+}
 
 // MARK: - GramSMC IOKit Controller
 
+@MainActor
 class GramSMCController: ObservableObject {
     @Published var capabilities: UInt32 = 0
     @Published var keyboardBacklight: Int = 0  // 0=Off, 1=Low, 2=High
@@ -402,6 +813,7 @@ class GramSMCController: ObservableObject {
     @Published var batteryCareLimit: Int = 100
     @Published var usbCharging: Bool = false
     @Published var fnLock: Bool = false
+    @Published var touchpadEnabled: Bool = true
     @Published var cpuTemp: Int = 0
     @Published var fanRPM: Int = 0
     @Published var isConnected: Bool = false
@@ -519,8 +931,7 @@ class GramSMCController: ObservableObject {
             isConnected = true
             setupNotifications()
             // Read version
-            // Read version
-            if let version = getStringProperty("Version") {
+            if let version = getStringProperty("GramSMC-Version") {
                 kextVersion = version
             }
         } else {
@@ -638,6 +1049,7 @@ class GramSMCController: ObservableObject {
             batteryCareLimit = Int(getProperty("BatteryCareLimit") ?? 100)
             usbCharging = getBoolProperty("USBCharging")
             fnLock = getBoolProperty("FnLock")
+            touchpadEnabled = getBoolProperty("IsTouchpadEnabled")
             cpuTemp = Int(getProperty("CPUTemp") ?? 0)
             fanRPM = Int(getProperty("FanRPM") ?? 0)
             kextVersion = getStringProperty("GramSMC-Version") ?? "Unknown"
@@ -724,6 +1136,12 @@ class GramSMCController: ObservableObject {
         fnLock = enabled
         setProperty("FnLock", value: enabled ? 1 : 0)
         saveSettings()
+    }
+    
+    func setTouchpad(_ enabled: Bool) {
+        guard service != 0 else { return }
+        touchpadEnabled = enabled
+        setProperty("IsTouchpadEnabled", value: enabled ? 1 : 0)
     }
     
     private func setProperty(_ name: String, value: UInt32) {
